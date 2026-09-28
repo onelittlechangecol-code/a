@@ -2875,6 +2875,15 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
   let rd = reflect(-v, n);
   let ground = vec3f(0.2, 0.24, 0.11) * (F.sunCol.rgb * 0.55 * F.sunDir.w + vec3f(0.35, 0.38, 0.42));
   let env = mix(skyColor(rd), ground, smoothstep(0.03, -0.1, rd.y)) * mix(0.5, 1.0, sh);
+  if (m == 1 || m == 6) {
+    // character key light: soft, warm, from above and to one side of the camera, so faces keep their modelling
+    let up = vec3f(0.0, 1.0, 0.0); let rt = normalize(cross(up, v));
+    let kd = normalize(v * 0.3 + up * 0.6 - rt * 0.85);
+    let kw = clamp((dot(n, kd) + 0.15) / 1.15, 0.0, 1.0);
+    c += base * vec3f(1.0, 0.9, 0.78) * kw * 0.45 * F.sunDir.w;
+    c -= base * amb * 0.3 * (1.0 - kw);
+    c += vec3f(1.0, 0.92, 0.82) * ggx(n, v, kd, max(rough, 0.3)) * 0.02 * F.sunDir.w;
+  }
   if (m == 1) {
     // skin: a tight wet sheen over the broad lobe, and soft peach-fuzz scattering at grazing angles
     c += F.sunCol.rgb * ggx(n, v, l, 0.26) * sh * F.sunDir.w * 0.035;
