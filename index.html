@@ -827,7 +827,7 @@ for (const b of BONES) {
 }
 
 const HC = {
-  skin: mc('#f0c09a', 1), blush: mc('#eb9c86', 1), lip: mc('#b4545a', 1), brow: mc('#6e4219', 7),
+  skin: mc('#ecbb96', 1), blush: mc('#e39a86', 1), lip: mc('#b4545a', 1), brow: mc('#6e4219', 7),
   tunic: mc('#1f6f8b', 2), tunicDark: mc('#15546b', 2), trim: mc('#d8a64c', 5), shirt: mc('#ece0c8', 2),
   pants: mc('#2c3352', 2), leather: mc('#6b4428', 3), leatherLight: mc('#94603a', 3), leatherDark: mc('#3d2617', 3),
   hair: mc('#c98a3b', 7), hairDark: mc('#8c5723', 7), cape: mc('#a8242f', 2), capeIn: mc('#6c1720', 2),
@@ -887,11 +887,30 @@ function buildHero() {
   const P = (mesh, bones, custom = null) => parts.push({ mesh, bones, custom });
   // ---- head ----
   P(ellipsoid(HB.headC, [0.112, 0.132, 0.122], (n0) => {
-    const cheek = Math.max(0, 1 - Math.hypot(Math.abs(n0[0]) - 0.55, n0[1] + 0.22, n0[2] - 0.72) / 0.3);
-    return V.lerp(HC.skin, HC.blush, cheek * 0.55).concat(1).slice(0, 3).concat([1]);
-  }, 34, 28, (q, n0) => {
+    const near = (c, r) => Math.max(0, 1 - Math.hypot(n0[0] - c[0], n0[1] - c[1], n0[2] - c[2]) / r);
+    const ax = Math.abs(n0[0]);
+    const cheek = Math.max(0, 1 - Math.hypot(ax - 0.55, n0[1] + 0.22, n0[2] - 0.72) / 0.3);
+    const socket = Math.max(0, 1 - Math.hypot(ax - 0.37, n0[1] - 0.1, n0[2] - 0.92) / 0.2);
+    const lips = Math.max(0, 1 - Math.hypot(n0[0] / 1.7, (n0[1] + 0.36) * 1.9, n0[2] - 0.93) / 0.1);
+    let c = V.lerp(HC.skin, HC.blush, cheek * 0.5 + near([0, -0.12, 0.99], 0.12) * 0.35);
+    c = V.lerp(c, V.mul(HC.skin, 0.78), socket * 0.35);
+    c = V.lerp(c, HC.lip, smooth(0.25, 0.7, lips) * 0.75);
+    c = V.mul(c, 1 - smooth(-0.45, -0.85, n0[1]) * 0.12);
+    return c.concat([1]);
+  }, 56, 46, (q, n0) => {
     if (n0[1] < 0) { const k = -n0[1]; q[0] *= 1 - 0.24 * Math.pow(k, 1.3); q[2] += 0.014 * k * k * Math.max(0, n0[2]); }
     if (n0[2] < -0.3) q[2] *= 0.94;
+    const bump = (c, r, amt) => { const dd = Math.hypot(n0[0] - c[0], n0[1] - c[1], n0[2] - c[2]); if (dd < r) q = V.add(q, V.mul(n0, amt * (0.5 + 0.5 * Math.cos(dd / r * Math.PI)))); };
+    for (const s of [1, -1]) {
+      bump([s * 0.37, 0.08, 0.92], 0.22, -0.006);   // eye sockets
+      bump([s * 0.34, 0.3, 0.89], 0.17, 0.0035);    // brow ridge
+      bump([s * 0.56, -0.14, 0.8], 0.24, 0.0045);   // cheekbones
+      bump([s * 0.42, -0.5, 0.74], 0.2, -0.002);    // soft hollow under the cheek
+    }
+    bump([0, -0.36, 0.93], 0.13, 0.003);            // lips
+    bump([0, -0.56, 0.82], 0.16, 0.003);            // chin
+    const nb = Math.exp(-Math.pow(n0[0] / 0.075, 2)) * smooth(0.28, 0.08, n0[1]) * smooth(-0.26, -0.06, n0[1]) * Math.max(0, n0[2] - 0.8) * 5;
+    q = V.add(q, V.mul(n0, 0.008 * nb));            // nose bridge
     return q;
   }), [BI.head]);
   // hair cap: covers crown, back and sides; leaves the face open
@@ -906,19 +925,22 @@ function buildHero() {
   P(ellipsoid([0, 1.19, -0.006], [0.158, 0.19, 0.112], (n0) => {
     if (n0[2] > 0.55 && n0[1] > 0.5 && Math.abs(n0[0]) < 0.28 - (n0[1] - 0.5) * 0.3) return HC.shirt;
     if (n0[2] > 0.5 && n0[1] > 0.42 && Math.abs(n0[0]) < 0.34 - (n0[1] - 0.42) * 0.3) return HC.trim;
-    return V.lerp(HC.tunicDark, HC.tunic, smooth(-0.9, 0.3, n0[1])).concat([2]);
+    return V.lerp(HC.tunicDark, HC.tunic, smooth(-0.9, 0.3, n0[1])).concat([9]);
   }, 30, 22, (q, n0) => { if (n0[1] > 0.3) q[0] *= 1 + 0.1 * (n0[1] - 0.3); if (n0[2] < 0) q[2] *= 0.88; return q; }), [BI.chest, BI.spine, BI.ua(1), BI.ua(-1)]);
   P(ellipsoid([0, 1.0, 0], [0.136, 0.14, 0.102], () => HC.tunic, 26, 14), [BI.spine, BI.pelvis, BI.chest]);
   P(transformed(torusMesh(0.064, 0.02, 28, 8, HC.trim), at(0, 1.35, -0.004)), [BI.chest, BI.neck]);
+  // folded cowl gathered around the neck
+  P(transformed(torusMesh(0.078, 0.032, 32, 10, HC.tunicDark), M4.scale(at(0, 1.365, -0.012), 1, 0.9, 0.92)), [BI.chest, BI.neck]);
+  P(transformed(torusMesh(0.066, 0.024, 32, 10, V.mul(HC.tunic, 0.9).concat([2])), at(0, 1.395, -0.01)), [BI.neck, BI.chest]);
   // tunic skirt: blended between pelvis and the thighs so it flares with each stride
   {
     const m = new Mesh(), seg = 64, rings = 9;
     for (let k = 0; k <= rings; k++) {
-      const t = k / rings, y = lerp(0.975, 0.64, t), rx = lerp(0.142, 0.205, t), rz = lerp(0.106, 0.16, t);
+      const t = k / rings, y = lerp(0.975, 0.64, t), rx = lerp(0.15, 0.235, Math.sqrt(t)), rz = lerp(0.112, 0.18, Math.sqrt(t));
       for (let j = 0; j <= seg; j++) {
         const a = j / seg * TAU, x = Math.sin(a) * rx, z = Math.cos(a) * rz;
         const hem = t > 0.84, wave = Math.sin(a * 16) * 0.05 * t * t + Math.sin(a * 5 + 1) * 0.02 * t;
-        m.v([x * (1 + wave), y, z * (1 + wave)], V.norm([Math.sin(a), 0.35, Math.cos(a)]), hem ? HC.trim : (j % 8 === 0 && t > 0.3 ? HC.tunicDark : HC.tunic));
+        m.v([x * (1 + wave), y, z * (1 + wave)], V.norm([Math.sin(a), 0.35, Math.cos(a)]), (hem ? HC.tunic : HC.tunic).slice(0, 3).concat([9]));
       }
     }
     for (let k = 0; k < rings; k++) for (let j = 0; j < seg; j++) { const a = k * (seg + 1) + j, b = a + seg + 1; m.tri(a, b, a + 1); m.tri(a + 1, b, b + 1); }
@@ -928,13 +950,13 @@ function buildHero() {
       return [[BI.pelvis, 1 - k], [BI.thigh(1), k * s], [BI.thigh(-1), k * (1 - s)]];
     });
   }
-  P(transformed(torusMesh(1, 0.15, 36, 8, HC.leatherDark), M4.scale(at(0, 0.955, 0), 0.146, 0.13, 0.11)), [BI.pelvis]);
-  P(ellipsoid([0, 0.955, 0.115], [0.03, 0.024, 0.01], HC.gold, 14, 10), [BI.pelvis]);
-  P(ellipsoid([-0.13, 0.9, 0.05], [0.042, 0.052, 0.036], HC.leather, 14, 10), [BI.pelvis, BI.thigh(-1)]);
-  P(ellipsoid([0.12, 0.905, -0.07], [0.035, 0.045, 0.03], HC.leatherLight, 12, 8), [BI.pelvis, BI.thigh(1)]);
+  P(transformed(torusMesh(1, 0.13, 40, 8, HC.leatherDark), M4.scale(at(0, 0.958, 0), 0.178, 0.16, 0.134)), [BI.pelvis]);
+  P(ellipsoid([0, 0.958, 0.152], [0.032, 0.026, 0.01], HC.gold, 14, 10), [BI.pelvis]);
+  P(ellipsoid([-0.172, 0.915, 0.06], [0.042, 0.052, 0.036], HC.leather, 14, 10), [BI.pelvis, BI.thigh(-1)]);
+  P(ellipsoid([0.16, 0.92, -0.08], [0.035, 0.045, 0.03], HC.leatherLight, 12, 8), [BI.pelvis, BI.thigh(1)]);
   // baldric across the chest (front and back)
   const strap = (pts) => { for (let i = 0; i < pts.length - 1; i++) P(tubeMesh(pts[i], pts[i + 1], () => 0.012, () => HC.leather, 8, 2), [BI.chest, BI.spine]); };
-  strap([[0.12, 1.33, 0.06], [0.05, 1.24, 0.112], [-0.04, 1.12, 0.113], [-0.11, 1.0, 0.1], [-0.14, 0.96, 0.06]]);
+  strap([[0.12, 1.33, 0.06], [0.05, 1.24, 0.112], [-0.04, 1.12, 0.113], [-0.12, 1.0, 0.13], [-0.17, 0.96, 0.08]]);
   strap([[0.12, 1.33, -0.07], [0.04, 1.22, -0.104], [-0.06, 1.1, -0.1], [-0.13, 0.98, -0.07]]);
   // left pauldron
   P(keepTris(ellipsoid([0.178, 1.336, -0.01], [0.078, 0.052, 0.078], (n0) => n0[1] < -0.05 ? HC.gold : HC.leatherLight, 20, 12), p => p[1] > 1.31), [BI.ua(1), BI.chest]);
@@ -989,9 +1011,51 @@ function buildHero() {
     }
   }
   const nv = mesh.vcount;
+  bakeAO(mesh);
   const out = new Float32Array(nv * 13);
   for (let k = 0; k < nv; k++) out.set([mesh.c[k * 4], mesh.c[k * 4 + 1], mesh.c[k * 4 + 2], mesh.c[k * 4 + 3], mesh.p[k * 3], mesh.p[k * 3 + 1], mesh.p[k * 3 + 2]], k * 13 + 6);
   return { mesh, bi: new Uint8Array(bi), bw: new Float32Array(bw), out, idx: new Uint32Array(mesh.i), nv };
+}
+
+function bakeAO(mesh) {
+  const nv = mesh.vcount, cs = 0.018;
+  let mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9];
+  for (let k = 0; k < nv; k++) for (let a = 0; a < 3; a++) { mn[a] = Math.min(mn[a], mesh.p[k * 3 + a]); mx[a] = Math.max(mx[a], mesh.p[k * 3 + a]); }
+  mn = mn.map(v => v - 0.3); mx = mx.map(v => v + 0.3);
+  const D = mn.map((v, a) => Math.ceil((mx[a] - v) / cs));
+  const grid = new Uint8Array(D[0] * D[1] * D[2]);
+  const cell = (x, y, z) => { const i = Math.floor((x - mn[0]) / cs), j = Math.floor((y - mn[1]) / cs), k = Math.floor((z - mn[2]) / cs); return (i < 0 || j < 0 || k < 0 || i >= D[0] || j >= D[1] || k >= D[2]) ? -1 : (k * D[1] + j) * D[0] + i; };
+  for (let t = 0; t < mesh.i.length; t += 3) {
+    const A = mesh.i[t] * 3, B = mesh.i[t + 1] * 3, C = mesh.i[t + 2] * 3;
+    for (const [u, w] of [[0, 0], [1, 0], [0, 1], [0.33, 0.33], [0.5, 0], [0, 0.5], [0.5, 0.5]]) {
+      const x = mesh.p[A] + (mesh.p[B] - mesh.p[A]) * u + (mesh.p[C] - mesh.p[A]) * w, y = mesh.p[A + 1] + (mesh.p[B + 1] - mesh.p[A + 1]) * u + (mesh.p[C + 1] - mesh.p[A + 1]) * w, z = mesh.p[A + 2] + (mesh.p[B + 2] - mesh.p[A + 2]) * u + (mesh.p[C + 2] - mesh.p[A + 2]) * w;
+      const c = cell(x, y, z); if (c >= 0) grid[c] = 1;
+    }
+  }
+  const dirs = [];
+  for (let k = 0; k < 24; k++) { const y = 1 - (k + 0.5) / 24 * 2, r = Math.sqrt(1 - y * y), ph = k * 2.39996; dirs.push([Math.cos(ph) * r, y, Math.sin(ph) * r]); }
+  const aoArr = new Float32Array(nv);
+  for (let v = 0; v < nv; v++) {
+    const p = [mesh.p[v * 3], mesh.p[v * 3 + 1], mesh.p[v * 3 + 2]], n = [mesh.n[v * 3], mesh.n[v * 3 + 1], mesh.n[v * 3 + 2]];
+    let occ = 0, cnt = 0;
+    for (const d of dirs) {
+      const c = V.dot(d, n); if (c < 0.15) continue;
+      cnt += c;
+      for (let s = 0.035; s < 0.22; s += 0.016) {
+        const q = cell(p[0] + (d[0] + n[0] * 0.3) * s, p[1] + (d[1] + n[1] * 0.3) * s, p[2] + (d[2] + n[2] * 0.3) * s);
+        if (q >= 0 && grid[q]) { occ += c * (1 - s / 0.26); break; }
+      }
+    }
+    aoArr[v] = clamp(occ / (cnt || 1), 0, 1);
+  }
+  // smooth across the mesh so voxel steps never show
+  const sum = new Float32Array(nv), num = new Float32Array(nv);
+  for (let pass = 0; pass < 4; pass++) {
+    sum.fill(0); num.fill(0);
+    for (let t = 0; t < mesh.i.length; t += 3) for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) { sum[mesh.i[t + a]] += aoArr[mesh.i[t + b]]; num[mesh.i[t + a]]++; }
+    for (let v = 0; v < nv; v++) aoArr[v] = num[v] ? sum[v] / num[v] : aoArr[v];
+  }
+  for (let v = 0; v < nv; v++) { const ao = 1 - 0.6 * aoArr[v]; for (let a = 0; a < 3; a++) mesh.c[v * 4 + a] *= ao; }
 }
 
 // accessory meshes (drawn as instances attached to bones)
@@ -1070,7 +1134,7 @@ const LOCKS = (() => {
   // crown: layered locks sweeping back
   for (let row = 0; row < 3; row++) for (let k = 0; k < 7; k++) {
     const x = -0.072 + k * 0.024;
-    L.push({ b: [x, 1.672 - row * 0.012, 0.045 - row * 0.05 - Math.abs(x) * 0.2], d: [x * 1.5 + (r() - 0.5) * 0.25, 0.1 - row * 0.35, -1], len: 0.12 + r() * 0.04, w: 0.06, sway: 0.8 });
+    L.push({ b: [x * 0.95, 1.668 - row * 0.014, 0.05 - row * 0.05 - Math.abs(x) * 0.2], d: [x * 1.5 + (r() - 0.5) * 0.25, -0.22 - row * 0.3, -1], len: 0.13 + r() * 0.04, w: 0.065, sway: 0.8 });
   }
   // sides framing the face, ears poke through
   for (const s of [1, -1]) for (let k = 0; k < 4; k++) L.push({ b: [0.106 * s, 1.598 - k * 0.01, 0.07 - k * 0.045], d: [0.3 * s, -1, 0.22 - k * 0.1], len: 0.11 + k * 0.02 + r() * 0.02, w: 0.05, sway: 0.7 });
@@ -2111,7 +2175,7 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
   var rough = roughIn; var metal = 0.0; var sss = 0.0; var sheen = 0.0;
   let m = i32(mat + 0.5);
   if (m == 1) { rough = 0.48; sss = 1.0; }
-  else if (m == 2) { rough = 0.88; sheen = 0.55; }
+  else if (m == 2 || m == 9) { rough = 0.86; sheen = 0.55; }
   else if (m == 3) { rough = 0.5; }
   else if (m == 4) { rough = 0.16; metal = 1.0; }
   else if (m == 5) { rough = 0.28; metal = 1.0; }
@@ -2224,7 +2288,7 @@ fn vnoise3(p: vec3f) -> f32 {
   var n = normalize(v.n);
   if (!ff) { n = -n; }
   let mat = v.col.a;
-  let isSkin = 1.0 - step(0.5, abs(mat - 1.0)); let isCloth = 1.0 - step(0.5, abs(mat - 2.0));
+  let isSkin = 1.0 - step(0.5, abs(mat - 1.0)); let isEmb = 1.0 - step(0.5, abs(mat - 9.0)); let isCloth = 1.0 - step(0.5, abs(mat - 2.0)) + isEmb;
   let isLeather = 1.0 - step(0.5, abs(mat - 3.0)); let isMetal = step(3.5, mat) * (1.0 - step(5.5, mat));
   let isEye = 1.0 - step(0.5, abs(mat - 6.0)); let isHair = 1.0 - step(0.5, abs(mat - 7.0));
   let p = v.lp;
@@ -2241,7 +2305,8 @@ fn vnoise3(p: vec3f) -> f32 {
   let strands = sin(p.x * 260.0 + vnoise3(p * 40.0) * 5.0) * 0.5 + 0.5;
   let capStr = sin(atan2(p.x, p.z) * 55.0 + vnoise3(p * 35.0) * 3.0) * 0.5 + 0.5;
   let hairH = mix(strands, capStr, step(1.2, p.y));
-  let h = isCloth * weave * smoothstep(0.004, 0.0012, fp) * 0.00045
+  let embH = isEmb * step(p.y, 0.72) * step(0.63, p.y) * (1.0 - smoothstep(0.08, 0.16, abs(abs(fract(atan2(p.x, p.z) * 7.0 / 3.14159) - 0.5) * 2.0 + abs((p.y - 0.676) / 0.02) - 0.75)));
+  let h = embH * 0.0008 + isCloth * weave * smoothstep(0.004, 0.0012, fp) * 0.00045
         + isLeather * grain * smoothstep(0.006, 0.0015, fp) * 0.0006
         + isSkin * pores * smoothstep(0.003, 0.0008, fp) * 0.00012
         + isMetal * brushed * 0.00008
@@ -2251,7 +2316,15 @@ fn vnoise3(p: vec3f) -> f32 {
   let r1 = cross(py, n); let r2 = cross(n, px); let det = dot(px, r1);
   let grad = sign(det) * (dhx * r1 + dhy * r2);
   n = normalize(abs(det) * n - grad);
+  // gold-thread embroidery: a band of linked diamonds above the hem, bordered by twin rules
+  let ea = atan2(p.x, p.z) * 7.0 / 3.14159;
+  let ey = (p.y - 0.676) / 0.02;
+  let dia = abs(fract(ea) - 0.5) * 2.0 + abs(ey);
+  let emb = isEmb * step(p.y, 1.0) * max(max(1.0 - smoothstep(0.08, 0.16, abs(dia - 0.75)), 1.0 - smoothstep(0.1, 0.2, abs(abs(ey) - 1.45))), step(abs(ey), 1.0) * step(dia, 0.35) * 0.9);
+  let hemBand = isEmb * step(p.y, 0.652);
+  let embAll = clamp(emb + hemBand, 0.0, 1.0);
   var base = v.col.rgb * v.tint.rgb;
+  base = mix(base, vec3f(0.78, 0.55, 0.2), embAll);
   base *= 1.0 - isCloth * (1.0 - weave) * 0.16 - isLeather * (0.55 - grain) * 0.22 - isHair * (1.0 - hairH) * 0.22;
   // iris fibres + dark limbal ring (only shows on the coloured part of the eye)
   let ir = length(p.xy); let ang = atan2(p.y, p.x);
