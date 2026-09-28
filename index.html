@@ -1146,7 +1146,37 @@ function buildHero() {
     P(tubeMesh(hp, kn, t => lerp(0.08, 0.056, t) + Math.sin(t * Math.PI) * 0.006 + Math.sin(t * 34) * 0.002 * smooth(0.6, 1, t), () => HC.pants, 22, 22), [BI.thigh(s), BI.pelvis, BI.shin(s)]);
     P(tubeMesh(kn, an, t => t < 0.34 ? lerp(0.055, 0.05, t / 0.34) : (t < 0.44 ? 0.064 : lerp(0.058, 0.046, (t - 0.44) / 0.56)),
       (t) => t < 0.34 ? HC.pants : (t < 0.44 ? HC.leatherLight : HC.leather), 20, 14), [BI.shin(s), BI.thigh(s), BI.foot(s)]);
-    P(ellipsoid(V.add(kn, [0, 0.005, 0.045]), [0.05, 0.058, 0.026], (n0) => Math.hypot(n0[0], n0[1]) > 0.85 ? HC.leatherDark : HC.leatherLight, 16, 12), [BI.shin(s), BI.thigh(s)]);
+    // knee cop: ridged steel cup, a fan wing on the outer side, small lames above and below, gold rims, strap behind
+    {
+      const stD = [0.28, 0.3, 0.34, 4], stL = [0.5, 0.52, 0.56, 4], kc = V.add(kn, [0, 0.005, 0.048]);
+      P(ellipsoid(kc, [0.045, 0.047, 0.021], (n0) => Math.hypot(n0[0], n0[1]) > 0.9 ? HC.gold : (Math.abs(n0[0]) < 0.12 ? stL : stD), 22, 14,
+        (q, n0) => { if (Math.abs(n0[0]) < 0.12 && n0[2] > 0) q[2] += 0.004 * (1 - Math.abs(n0[0]) / 0.12); return q; }), [BI.shin(s), BI.thigh(s)]);
+      // fan wing: a shallow shell flaring out and back on the outside of the knee
+      const wing = new Mesh(), NA = 10, NR = 5;
+      for (let i = 0; i <= NR; i++) for (let j = 0; j <= NA; j++) {
+        const rr = 0.012 + i / NR * 0.04, a = lerp(-1.25, 1.25, j / NA);
+        const q = V.add(kc, [s * (0.03 + rr * 0.75), Math.sin(a) * rr, -rr * 0.9 + Math.cos(a) * 0.012 - 0.01 + (1 - Math.cos(a)) * 0.004]);
+        wing.v(q, V.norm([s * 0.8, Math.sin(a) * 0.2, 0.5]), i >= NR - 1 || j === 0 || j === NA ? HC.gold : (j % 3 === 0 ? stL : stD));
+      }
+      for (let i = 0; i < NR; i++) for (let j = 0; j < NA; j++) { const a = i * (NA + 1) + j, b = a + NA + 1; wing.tri(a, a + 1, b); wing.tri(a + 1, b + 1, b); }
+      wing.recomputeNormals();
+      P(wing, [BI.shin(s), BI.thigh(s)]);
+      P(ellipsoid(V.add(kc, [s * 0.034, 0, -0.004]), [0.006, 0.006, 0.006], HC.gold, 8, 5), [BI.shin(s), BI.thigh(s)]);
+      // articulating lames above (on the thigh) and below (on the shin)
+      for (const [dy, bone, w] of [[0.058, BI.thigh(s), 0.044], [-0.06, BI.shin(s), 0.042]]) {
+        const lm = new Mesh(), N = 14;
+        for (let u = 0; u <= 2; u++) for (let j = 0; j <= N; j++) {
+          const a = lerp(-1.3, 1.3, j / N), rr = 0.05 + (dy > 0 ? 0.006 : 0.002), y = kc[1] + dy + (u - 1) * 0.011;
+          lm.v([kn[0] + Math.sin(a) * rr, y, kn[2] + 0.004 + Math.cos(a) * rr], [Math.sin(a), 0, Math.cos(a)], u === 0 || u === 2 ? HC.gold : stD);
+        }
+        for (let u = 0; u < 2; u++) for (let j = 0; j < N; j++) { const a = u * (N + 1) + j, b = a + N + 1; lm.tri(a, a + 1, b); lm.tri(a + 1, b + 1, b); }
+        lm.recomputeNormals();
+        P(lm, [bone]);
+      }
+      // strap round the back of the knee
+      const ring = []; for (let j = 0; j <= 16; j++) { const a = 1.3 + j / 16 * (TAU - 2.6); ring.push([kn[0] + Math.sin(a) * 0.057, kn[1] + 0.005, kn[2] + Math.cos(a) * 0.057]); }
+      for (let j = 0; j < 16; j++) P(tubeMesh(ring[j], ring[j + 1], () => 0.0042, () => HC.leatherDark, 5, 1, [false, false]), [BI.shin(s), BI.thigh(s)]);
+    }
     for (let k = 0; k < 4; k++) {
       const t0 = 0.52 + k * 0.1, t1 = t0 + 0.07, c0 = V.lerp(kn, an, t0), c1 = V.lerp(kn, an, t1);
       const r0 = lerp(0.058, 0.046, (t0 - 0.44) / 0.56) + 0.002, r1 = lerp(0.058, 0.046, (t1 - 0.44) / 0.56) + 0.002;
