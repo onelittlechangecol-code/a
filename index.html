@@ -982,6 +982,23 @@ function buildHero() {
       return [[BI.pelvis, 1 - k], [BI.thigh(1), k * s], [BI.thigh(-1), k * (1 - s)]];
     });
   }
+  // mail skirt: a hauberk hem hanging a hand's width below the tunic
+  {
+    const m = new Mesh(), seg = 64, rings = 5, mail = [0.3, 0.31, 0.33, 16];
+    for (let k = 0; k <= rings; k++) {
+      const t = k / rings, y = lerp(0.74, 0.585, t), tt = lerp(0.7, 1.16, t), rx = lerp(0.15, 0.235, Math.sqrt(tt)) - 0.012, rz = lerp(0.112, 0.18, Math.sqrt(tt)) - 0.012;
+      for (let j = 0; j <= seg; j++) {
+        const a = j / seg * TAU, dag = k === rings ? 0.012 * (Math.abs(Math.sin(a * 24)) - 0.5) : 0;
+        m.v([Math.sin(a) * rx, y + dag, Math.cos(a) * rz], V.norm([Math.sin(a), 0.2, Math.cos(a)]), mail);
+      }
+    }
+    for (let k = 0; k < rings; k++) for (let j = 0; j < seg; j++) { const a = k * (seg + 1) + j, b = a + seg + 1; m.tri(a, b, a + 1); m.tri(a + 1, b, b + 1); }
+    m.recomputeNormals();
+    P(m, null, (p) => {
+      const t = clamp((0.975 - p[1]) / 0.335, 0, 1), s = smooth(-0.07, 0.07, p[0]), k = 0.8 * t * t;
+      return [[BI.pelvis, 1 - k], [BI.thigh(1), k * s], [BI.thigh(-1), k * (1 - s)]];
+    });
+  }
   P(transformed(torusMesh(1, 0.13, 40, 8, HC.leatherDark), M4.scale(at(0, 0.958, 0), 0.178, 0.16, 0.134)), [BI.pelvis]);
   P(ellipsoid([0, 0.958, 0.152], [0.032, 0.026, 0.01], HC.gold, 14, 10), [BI.pelvis]);
   P(ellipsoid([-0.172, 0.915, 0.06], [0.042, 0.052, 0.036], HC.leather, 14, 10), [BI.pelvis, BI.thigh(-1)]);
@@ -2451,6 +2468,7 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
   else if (m == 10) { rough = 0.92; }
   else if (m == 11) { rough = 0.85; }
   else if (m == 12) { rough = 0.9; sss = 0.25; }
+  else if (m == 16) { rough = 0.42; metal = 1.0; }
   let v = normalize(F.camPos.xyz - wp); let l = F.sunDir.xyz;
   let nl = dot(n, l);
   // soft wrap for a painterly, forgiving look
@@ -2480,7 +2498,8 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
     c += F.sunCol.rgb * ggx(n, v, l, rough) * sh * F.sunDir.w * fres * (1.0 - rough * 0.4);
   }
   let env = skyColor(reflect(-v, n));
-  c += env * fres * mix(0.3 * (1.0 - rough), 0.85, metal);
+  // mail rings shadow each other, so they only catch a fraction of the sky
+  c += env * fres * mix(0.3 * (1.0 - rough), 0.85, metal) * select(1.0, 0.3, m == 16);
   c += sheen * pow(1.0 - nv, 4.0) * base * (F.skyHor.rgb * 0.9 + F.sunCol.rgb * 0.3);
   c += rim * pow(1.0 - nv, 3.0) * (F.skyHor.rgb * 0.55 + F.sunCol.rgb * 0.35 * max(sh, 0.4));
   return c;
@@ -2578,6 +2597,7 @@ fn vnoise3(p: vec3f) -> f32 {
   let isLeaf = 1.0 - step(0.5, abs(mat - 8.0)); let isBark = 1.0 - step(0.5, abs(mat - 10.0));
   let isStone = 1.0 - step(0.5, abs(mat - 11.0)) + (1.0 - step(0.5, abs(mat - 14.0))) * 0.4; let isGrass = 1.0 - step(0.5, abs(mat - 12.0));
   let isRune = 1.0 - step(0.5, abs(mat - 13.0)); let isTile = 1.0 - step(0.5, abs(mat - 14.0)); let isPortal = 1.0 - step(0.5, abs(mat - 15.0));
+  let isMail = 1.0 - step(0.5, abs(mat - 16.0));
   let p = v.lp;
   // fade micro detail out before it can alias
   let fp = length(fwidth(p)) + 1e-6;
@@ -2597,7 +2617,13 @@ fn vnoise3(p: vec3f) -> f32 {
   let grooves = sin(atan2(p.x, p.z) * 15.0 + vnoise3(p * vec3f(3.0, 0.5, 3.0)) * 5.0) * 0.5 + 0.5;
   let stone = vnoise3(p * 5.0) * 0.5 + vnoise3(p * 16.0) * 0.3 + vnoise3(p * 40.0) * 0.2 - smoothstep(0.015, 0.0, abs(vnoise3(p * 3.0) - 0.5)) * 0.3;
   let turf = vnoise3(p * 34.0) * 0.6 + vnoise3(p * 90.0) * 0.4;
-  let h = isStone * stone * 0.035 + isGrass * turf * 0.012 + isLeaf * leafy * 0.02 + isBark * (grooves * 0.6 + vnoise3(p * 12.0) * 0.4) * 0.025 + embH * 0.0008 + isCloth * weave * smoothstep(0.004, 0.0012, fp) * 0.00045
+  // riveted mail: staggered rows of interlocking rings
+  let mu = atan2(p.x, p.z) * 16.0; let mv = p.y * 70.0; let mrow = floor(mv);
+  let mc = vec2f(fract(mu + 0.5 * (mrow - 2.0 * floor(mrow * 0.5))) - 0.5, fract(mv) - 0.5);
+  let mr = length(mc * vec2f(1.0, 0.8));
+  let ringH = 1.0 - smoothstep(0.08, 0.2, abs(mr - 0.34));
+  let mailFade = smoothstep(0.02, 0.006, fp);
+  let h = isMail * ringH * mailFade * 0.0022 + isStone * stone * 0.035 + isGrass * turf * 0.012 + isLeaf * leafy * 0.02 + isBark * (grooves * 0.6 + vnoise3(p * 12.0) * 0.4) * 0.025 + embH * 0.0008 + isCloth * weave * smoothstep(0.004, 0.0012, fp) * 0.00045
         + isLeather * grain * smoothstep(0.006, 0.0015, fp) * 0.0006
         + isSkin * pores * smoothstep(0.003, 0.0008, fp) * 0.00012
         + isMetal * brushed * 0.00008
@@ -2615,6 +2641,7 @@ fn vnoise3(p: vec3f) -> f32 {
   let hemBand = isEmb * step(p.y, 0.652);
   let embAll = clamp(emb + hemBand, 0.0, 1.0);
   var base = v.col.rgb * v.tint.rgb;
+  base = mix(base, base * mix(0.6, mix(0.12, 1.15, ringH), mailFade), isMail);
   base = mix(base, vec3f(0.78, 0.55, 0.2), embAll);
   // rune glyphs: stacked angular symbols, only the carved strokes glow
   let gy = fract(p.y * 3.2); let gid = floor(p.y * 3.2); let gx = abs(p.x + p.z) * 5.0;
