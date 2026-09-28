@@ -3214,6 +3214,11 @@ struct Post { sun: vec4f };
   let q = v.uv - 0.5;
   let ca = q * dot(q, q) * 0.012;
   var c = vec3f(textureSample(src, smp, v.uv + ca).r, textureSample(src, smp, v.uv).g, textureSample(src, smp, v.uv - ca).b);
+  // unsharp mask: crisper fabric, hair and eyes; clamped so bright edges do not ring
+  let tx = 1.0 / vec2f(textureDimensions(src));
+  let nb = (textureSample(src, smp, v.uv + vec2f(tx.x, 0.0)).rgb + textureSample(src, smp, v.uv - vec2f(tx.x, 0.0)).rgb
+          + textureSample(src, smp, v.uv + vec2f(0.0, tx.y)).rgb + textureSample(src, smp, v.uv - vec2f(0.0, tx.y)).rgb) * 0.25;
+  c = max(c + clamp((c - nb) * 0.55, vec3f(-0.08), vec3f(0.08)), vec3f(0.0));
   c += textureSample(bloomTex, smp, v.uv).rgb * 0.6;
   // god rays: march the bright buffer toward the sun; foliage and terrain carve the shafts
   let toSun = PU.sun.xy - v.uv;
