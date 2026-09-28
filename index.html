@@ -977,6 +977,20 @@ function buildHero() {
     P(keepTris(dome, q => q[1] - (q[0] - c[0]) * -0.35 > c[1] - 0.004), [BI.ua(1), BI.chest]);
     for (let j = 0; j < 5; j++) { const a = -1.1 + j * 0.55; P(ellipsoid([c[0] + Math.sin(a) * r[0] * 0.93, c[1] + 0.008 - Math.sin(a) * r[0] * 0.93 * 0.35, c[2] + Math.cos(a) * r[2] * 0.93], [0.0045, 0.0045, 0.0045], HC.gold, 6, 4), [BI.ua(1)]); }
   }
+  // V-neck laces criss-crossing the shirt opening
+  const chestZ = (x, y) => -0.006 + 0.112 * Math.sqrt(Math.max(0, 1 - (x / 0.158) ** 2 - ((y - 1.19) / 0.19) ** 2)) + 0.004;
+  for (let k = 0; k < 3; k++) {
+    const y0 = 1.292 + k * 0.016, y1 = y0 + 0.012, x = 0.03 - k * 0.006;
+    for (const s of [1, -1]) P(tubeMesh([-x * s, y0, chestZ(-x * s, y0)], [x * s, y1, chestZ(x * s, y1)], () => 0.0024, () => HC.leatherDark, 6, 2), [BI.chest]);
+  }
+  // knife in a sheath on the left hip
+  P(tubeMesh([0.185, 0.93, 0.05], [0.215, 0.72, 0.085], t => lerp(0.018, 0.011, t), (t) => t > 0.9 ? HC.gold : HC.leatherDark, 10, 5), [BI.pelvis, BI.thigh(1)]);
+  P(tubeMesh([0.183, 0.945, 0.048], [0.176, 1.02, 0.04], () => 0.011, (t) => (Math.floor(t * 6) % 2 ? HC.leather : HC.wood), 8, 6), [BI.pelvis]);
+  P(ellipsoid([0.184, 0.94, 0.049], [0.03, 0.007, 0.014], HC.gold, 10, 6), [BI.pelvis]);
+  P(ellipsoid([0.175, 1.028, 0.04], [0.014, 0.014, 0.014], HC.gold, 8, 6), [BI.pelvis]);
+  // pouch flap and buckle
+  P(ellipsoid([-0.172, 0.945, 0.078], [0.044, 0.024, 0.03], HC.leatherDark, 12, 8), [BI.pelvis, BI.thigh(-1)]);
+  P(ellipsoid([-0.172, 0.93, 0.1], [0.009, 0.008, 0.005], HC.gold, 8, 6), [BI.pelvis]);
   // ---- arms + hands ----
   for (const s of [1, -1]) {
     P(ellipsoid(sd([0.162, 1.312, -0.008], s), [0.066, 0.064, 0.066], HC.tunic, 18, 12), [BI.ua(s), BI.chest]);
@@ -1003,6 +1017,12 @@ function buildHero() {
     P(tubeMesh(hp, kn, t => lerp(0.08, 0.056, t) + Math.sin(t * Math.PI) * 0.006 + Math.sin(t * 34) * 0.002 * smooth(0.6, 1, t), () => HC.pants, 22, 22), [BI.thigh(s), BI.pelvis, BI.shin(s)]);
     P(tubeMesh(kn, an, t => t < 0.34 ? lerp(0.055, 0.05, t / 0.34) : (t < 0.44 ? 0.064 : lerp(0.058, 0.046, (t - 0.44) / 0.56)),
       (t) => t < 0.34 ? HC.pants : (t < 0.44 ? HC.leatherLight : HC.leather), 20, 14), [BI.shin(s), BI.thigh(s), BI.foot(s)]);
+    P(ellipsoid(V.add(kn, [0, 0.005, 0.045]), [0.05, 0.058, 0.026], (n0) => Math.hypot(n0[0], n0[1]) > 0.85 ? HC.leatherDark : HC.leatherLight, 16, 12), [BI.shin(s), BI.thigh(s)]);
+    for (let k = 0; k < 4; k++) {
+      const t0 = 0.52 + k * 0.1, t1 = t0 + 0.07, c0 = V.lerp(kn, an, t0), c1 = V.lerp(kn, an, t1);
+      const r0 = lerp(0.058, 0.046, (t0 - 0.44) / 0.56) + 0.002, r1 = lerp(0.058, 0.046, (t1 - 0.44) / 0.56) + 0.002;
+      for (const q of [1, -1]) P(tubeMesh(V.add(c0, [-0.022 * q, 0, Math.sqrt(r0 * r0 - 0.0005)]), V.add(c1, [0.022 * q, 0, Math.sqrt(r1 * r1 - 0.0005)]), () => 0.0028, () => HC.leatherDark, 6, 2), [BI.shin(s)]);
+    }
     for (const tt of [0.6, 0.8]) {
       const c = V.lerp(kn, an, tt), r = lerp(0.058, 0.046, (tt - 0.44) / 0.56) + 0.004;
       P(transformed(torusMesh(r, 0.006, 26, 6, HC.leatherDark), at(c[0], c[1], c[2])), [BI.shin(s)]);
@@ -1474,6 +1494,11 @@ function computePose(st, t) {
       o.pel = [sw * 0.012, -0.015 + b * 0.004, 0]; o.breath = b * 0.02;
       o.hl = [0.3 + sw * 0.01, 0.9 + b * 0.006, 0.04]; o.hr = [-0.3 + sw * 0.01, 0.9 + b * 0.006, 0.04];
       o.fl = [0.13, 0.09, 0.02]; o.fr = [-0.12, 0.09, -0.04];
+      // slow weight shift from foot to foot, and a glance around every few seconds
+      const shift = Math.sin(t * 0.45) * 0.022;
+      o.pel[0] += shift; o.pel[1] -= Math.abs(shift) * 0.4; o.twP = Math.sin(t * 0.45) * 0.05; o.twC = -Math.sin(t * 0.45) * 0.04;
+      const g = (t % 9) / 9;
+      o.lookOff = [Math.sin(g * TAU) * 0.7 * smooth(0.55, 0.65, g) * smooth(0.98, 0.88, g), -0.1 * smooth(0.55, 0.65, g) * smooth(0.98, 0.88, g)];
       if (o.sword === 'guard') { guard(); o.fl = [0.15, 0.09, 0.1]; o.fr = [-0.13, 0.09, -0.12]; o.pel[1] = -0.05; }
       break;
     }
@@ -1582,6 +1607,7 @@ function updateRig(dt, time) {
     ly = clamp(angDiff(p.yaw + pose.spinYaw, a) - S.twC * 0.8, -0.9, 0.9); lp = clamp(-Math.atan2(d[1], Math.hypot(d[0], d[2])), -0.5, 0.5);
     if (Math.abs(angDiff(p.yaw, a)) > 1.8) { ly = 0; lp = 0; }
   } else if (st === 'run') ly = -S.twC * 0.9;
+  else if (pose.lookOff) { ly = pose.lookOff[0]; lp = pose.lookOff[1]; }
   p.lookYaw = damp(p.lookYaw, ly, 6, dt); p.lookPitch = damp(p.lookPitch, lp, 6, dt);
   // head lag spring (reacts to acceleration)
   for (let i = 0; i < 2; i++) { rig.headLagV[i] += (-rig.headLag[i] * 260 - rig.headLagV[i] * 14) * dt; rig.headLag[i] += rig.headLagV[i] * dt; }
