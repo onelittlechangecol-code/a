@@ -1036,16 +1036,36 @@ function buildHero() {
   const strap = (pts) => { for (let i = 0; i < pts.length - 1; i++) P(tubeMesh(pts[i], pts[i + 1], () => 0.012, () => HC.leather, 8, 2), [BI.chest, BI.spine]); };
   strap([[0.12, 1.33, 0.06], [0.05, 1.24, 0.112], [-0.04, 1.12, 0.113], [-0.12, 1.0, 0.13], [-0.17, 0.96, 0.08]]);
   strap([[0.12, 1.33, -0.07], [0.04, 1.22, -0.104], [-0.06, 1.1, -0.1], [-0.13, 0.98, -0.07]]);
-  // left pauldron: one domed plate following the shoulder slope, embossed ridges, gold rim and rivets
+  // left spaulder: steel cap with a raised ridge, three overlapping lames down the upper arm, gold edging and rivets
   {
-    const c = [0.19, 1.325, -0.01], r = [0.092, 0.062, 0.09];
-    const dome = ellipsoid(c, r, (n0) => {
-      const ring = Math.hypot(n0[0] * 0.6, n0[2]);
-      if (n0[1] < 0.18) return HC.gold;
-      return (Math.abs(n0[1] - 0.55) < 0.07 || Math.abs(n0[1] - 0.82) < 0.05) ? HC.leatherDark : HC.leatherLight;
-    }, 30, 18, (q, n0) => { q[1] -= q[0] * 0.35; if (Math.abs(n0[1] - 0.55) < 0.07 || Math.abs(n0[1] - 0.82) < 0.05) q = V.add(q, V.mul(n0, 0.004)); return q; });
+    const c = [0.19, 1.33, -0.01], r = [0.088, 0.058, 0.086];
+    const steelD = [0.4, 0.42, 0.46, 4], steelL = [0.62, 0.64, 0.68, 4];
+    const dome = ellipsoid(c, r, (n0) => n0[1] < 0.2 ? HC.gold : (Math.abs(n0[2]) < 0.1 ? steelL : steelD), 32, 18,
+      (q, n0) => { q[1] -= q[0] * 0.35; if (Math.abs(n0[2]) < 0.1 && n0[1] > 0.2) q = V.add(q, V.mul(n0, 0.006 * (1 - Math.abs(n0[2]) / 0.1))); return q; });
     P(keepTris(dome, q => q[1] - (q[0] - c[0]) * -0.35 > c[1] - 0.004), [BI.ua(1), BI.chest]);
-    for (let j = 0; j < 5; j++) { const a = -1.1 + j * 0.55; P(ellipsoid([c[0] + Math.sin(a) * r[0] * 0.93, c[1] + 0.008 - Math.sin(a) * r[0] * 0.93 * 0.35, c[2] + Math.cos(a) * r[2] * 0.93], [0.0045, 0.0045, 0.0045], HC.gold, 6, 4), [BI.ua(1)]); }
+    for (let j = 0; j < 5; j++) { const a = -1.1 + j * 0.55; P(ellipsoid([c[0] + Math.sin(a) * r[0] * 0.95, c[1] + 0.006 - Math.sin(a) * r[0] * 0.95 * 0.35, c[2] + Math.cos(a) * r[2] * 0.95], [0.005, 0.005, 0.005], HC.gold, 6, 4), [BI.ua(1)]); }
+    const sh = HB.sh, el = HB.el, ay = V.norm(V.sub(el, sh)), L = V.len(V.sub(el, sh));
+    const ox = V.norm(V.sub([1, 0.25, 0], V.mul(ay, V.dot([1, 0.25, 0], ay)))), oz = V.cross(ay, ox);
+    for (let k = 0; k < 3; k++) {
+      const m = new Mesh(), tc = 0.13 + k * 0.13, w = 0.2, rr = 0.07 - k * 0.004, NA = 20, NU = 4, span = 1.5 - k * 0.1;
+      for (let u = 0; u <= NU; u++) for (let j = 0; j <= NA; j++) {
+        const uu = u / NU, a = lerp(-span, span, j / NA), rad = rr + uu * 0.012;
+        const dir = V.add(V.mul(ox, Math.cos(a)), V.mul(oz, Math.sin(a)));
+        const q = V.add(sh, V.add(V.mul(ay, (tc + (uu - 0.5) * w) * L), V.mul(dir, rad)));
+        const edge = uu > 0.8 || j === 0 || j === NA;
+        m.v(q, dir, edge ? HC.gold : (Math.abs(a) < 0.12 ? steelL : steelD));
+      }
+      for (let u = 0; u < NU; u++) for (let j = 0; j < NA; j++) { const a = u * (NA + 1) + j, b = a + NA + 1; m.tri(a, a + 1, b); m.tri(a + 1, b + 1, b); }
+      m.recomputeNormals();
+      P(m, [BI.ua(1)]);
+      for (const a of [-span * 0.8, 0, span * 0.8]) {
+        const dir = V.add(V.mul(ox, Math.cos(a)), V.mul(oz, Math.sin(a)));
+        P(ellipsoid(V.add(sh, V.add(V.mul(ay, (tc + 0.2 * w) * L), V.mul(dir, rr + 0.011))), [0.0042, 0.0042, 0.0042], HC.gold, 6, 4), [BI.ua(1)]);
+      }
+    }
+    // leather strap holding the lames to the arm
+    const ring = []; for (let j = 0; j <= 20; j++) { const a = j / 20 * TAU; ring.push(V.add(sh, V.add(V.mul(ay, 0.5 * L), V.add(V.mul(ox, Math.cos(a) * 0.056), V.mul(oz, Math.sin(a) * 0.056))))); }
+    for (let j = 0; j < 20; j++) P(tubeMesh(ring[j], ring[j + 1], () => 0.004, () => HC.leatherDark, 5, 1, [false, false]), [BI.ua(1)]);
   }
   // cloak clasp at the front of the cowl: gold boss with a ruby
   P(ellipsoid([0, 1.336, 0.1], [0.028, 0.028, 0.011], (n0) => Math.hypot(n0[0], n0[1]) > 0.8 ? V.mul(HC.gold, 0.8).concat([5]) : HC.gold, 16, 10), [BI.chest, BI.neck]);
