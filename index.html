@@ -1071,6 +1071,38 @@ function buildHero() {
     const sh = sd(HB.sh, s), el = sd(HB.el, s), wr = sd(HB.wr, s), ha = sd(HB.ha, s);
     P(tubeMesh(sh, el, t => lerp(0.052, 0.042, t) + Math.sin(t * Math.PI) * 0.004 + Math.sin(t * 38) * 0.0022 * smooth(0.4, 0.95, t), (t) => t > 0.9 ? HC.trim : HC.shirt, 22, 24), [BI.ua(s), BI.chest, BI.fa(s)]);
     P(tubeMesh(el, wr, t => t < 0.3 ? lerp(0.041, 0.037, t / 0.3) : lerp(0.045, 0.036, (t - 0.3) / 0.7), (t) => t < 0.28 ? HC.skin : (t < 0.36 || t > 0.93 ? HC.leatherLight : HC.leather), 18, 12), [BI.fa(s), BI.ua(s), BI.hand(s)]);
+    // bracer: steel vambrace plate on the outer forearm, buckled straps and cross lacing on the inside
+    {
+      const ay = V.norm(V.sub(wr, el)), L = V.len(V.sub(wr, el));
+      const oz = V.norm(V.sub([0, 0, 1], V.mul(ay, ay[2]))), ox = V.mul(V.cross(ay, oz), -s);
+      const br = t => lerp(0.045, 0.036, (t - 0.3) / 0.7);
+      const pt = (t, a, off) => V.add(el, V.add(V.mul(ay, t * L), V.mul(V.add(V.mul(ox, Math.cos(a)), V.mul(oz, Math.sin(a) * s)), br(t) + off)));
+      const pm = new Mesh(), nt = 14, na = 16, a0 = 1.0;
+      for (let i = 0; i <= nt; i++) for (let j = 0; j <= na; j++) {
+        const t = lerp(0.4, 0.9, i / nt), a = lerp(-a0, a0, j / na), ridge = 0.004 * Math.max(0, 1 - Math.abs(a) * 4) + 0.0015 * Math.cos(a * 1.5);
+        const q = pt(t, a, 0.004 + ridge), nn = V.norm(V.sub(q, V.add(el, V.mul(ay, t * L))));
+        pm.v(q, nn, Math.abs(a) > a0 * 0.8 || i <= 1 || i >= nt - 1 ? HC.gold : (Math.abs(a) < 0.12 ? [0.62, 0.64, 0.68, 4] : [0.4, 0.42, 0.46, 4]));
+      }
+      for (let i = 0; i < nt; i++) for (let j = 0; j < na; j++) { const a = i * (na + 1) + j, b = a + na + 1; pm.tri(a, a + 1, b); pm.tri(a + 1, b + 1, b); }
+      pm.recomputeNormals();
+      P(pm, [BI.fa(s)]);
+      for (const t of [0.44, 0.86]) for (const a of [-0.7, 0.7]) P(ellipsoid(pt(t, a, 0.007), [0.0035, 0.0035, 0.0035], HC.gold, 8, 5), [BI.fa(s)]);
+      // two straps with small buckles
+      for (const t of [0.52, 0.78]) {
+        const ring = [];
+        for (let j = 0; j <= 20; j++) ring.push(pt(t, a0 + j / 20 * (TAU - 2 * a0), 0.0025));
+        for (let j = 0; j < 20; j++) P(tubeMesh(ring[j], ring[j + 1], () => 0.0032, () => HC.leatherDark, 5, 1, [false, false]), [BI.fa(s)]);
+        P(ellipsoid(pt(t, a0 + 0.3, 0.003), [0.0055, 0.0055, 0.0055], HC.gold, 8, 6), [BI.fa(s)]);
+      }
+      // criss-cross lacing on the inner forearm
+      const lz = [];
+      for (let k = 0; k <= 6; k++) { const t = lerp(0.4, 0.9, k / 6); lz.push(pt(t, Math.PI + 0.32, 0.002), pt(t, Math.PI - 0.32, 0.002)); }
+      for (let k = 0; k < 6; k++) {
+        P(tubeMesh(lz[k * 2], lz[k * 2 + 3], () => 0.0018, () => HC.shirt, 5, 1), [BI.fa(s)]);
+        P(tubeMesh(lz[k * 2 + 1], lz[k * 2 + 2], () => 0.0018, () => HC.shirt, 5, 1), [BI.fa(s)]);
+      }
+      for (const q of lz) P(ellipsoid(q, [0.0025, 0.0025, 0.0025], HC.gold, 6, 4), [BI.fa(s)]);
+    }
     // hand in its own frame: y toward fingertips, fingers curl inward
     const y = V.norm(V.sub(ha, wr)), z = V.norm(V.sub([0, 0, 1], V.mul(y, y[2]))), x = V.cross(y, z);
     const M = new Float32Array([...x, 0, ...y, 0, ...z, 0, ...wr, 1]);
