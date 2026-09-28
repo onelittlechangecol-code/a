@@ -1276,6 +1276,21 @@ function buildGoblin(M) {
   }
 }
 
+
+// ---------- ambient life: butterflies, birds, falling leaves ----------
+function buildLife(M) {
+  // butterfly wing (one side, spans +x), painted with dark veins and an edge band
+  M.bfWing = ellipsoid([0.5, 0, 0], [0.5, 0.02, 0.36], (n0) => {
+    const edge = smooth(0.7, 0.95, Math.hypot(n0[0], n0[2]));
+    return V.lerp([1, 1, 1], [0.08, 0.06, 0.08], edge).concat([8]);
+  }, 14, 6, (q) => { q[2] += q[0] * 0.25; return q; });
+  M.bfBody = ellipsoid([0, 0, 0], [0.08, 0.08, 0.5], mc('#2a2018', 3), 8, 6);
+  // bird wing (one side, spans +x) and body
+  M.birdWing = ellipsoid([0.5, 0, 0], [0.5, 0.03, 0.14], (n0) => (Math.abs(n0[0]) > 0.7 ? mc('#1f1f24', 2) : mc('#e8e4dc', 2)), 12, 6, (q) => { q[2] -= q[0] * q[0] * 0.4; return q; });
+  M.birdBody = ellipsoid([0, 0, 0], [0.14, 0.12, 0.42], (n0) => (n0[1] > 0 ? mc('#3b3b44', 2) : mc('#efece6', 2)), 12, 8);
+  M.leafBit = ellipsoid([0, 0, 0], [1, 0.06, 0.55], (n0) => V.mul(COL.leaf2, 0.9 + 0.2 * n0[2]).concat([8]), 10, 6, (q) => { q[1] += q[0] * q[0] * 0.15; return q; });
+}
+
 // hair locks laid out in bind space: base point, direction, length, width
 const LOCKS = (() => {
   const L = [], hc = HB.headC;
@@ -2783,7 +2798,7 @@ async function initRenderer(meshes) {
   GR.trailData = new Float32Array(16 * 6 * 7);
   GR.trailVB = empty(GR.trailData.byteLength, U.VERTEX);
   // instances
-  GR.maxDyn = 512;
+  GR.maxDyn = 1024;
   GR.dynData = new Float32Array(GR.maxDyn * INST_FLOATS);
   GR.dynIB = empty(GR.dynData.byteLength, U.VERTEX);
   GR.staticGroups = buildStaticInstances();
@@ -3037,6 +3052,7 @@ function buildDynamic() {
       L.add(s > 0 ? 'gobArmL' : 'gobArmR', arm, tint, prm);
     }
   }
+  addLife(L, t);
   // hero
   const flicker = p.inv > 0 && Math.floor(t * 18) % 2 === 0;
   if (!p.hidden && !flicker && rig.init) addHero(L, t);
@@ -3094,6 +3110,51 @@ function addHero(L, t) {
     M4.scale(M, 0.62 * k, 0.62, 0.52 * k);
     L.add('leaf', M, [1, 1, 1, 0.02], [0.7, 0.3, 0, 0]);
     L.add('stem', M, [1, 1, 1, 0], [0.7, 0, 0, 0]);
+  }
+}
+
+const BF_COLORS = [[1, 0.62, 0.15], [0.35, 0.6, 1], [1, 0.95, 0.5], [0.95, 0.45, 0.7], [0.75, 0.95, 1]];
+function addLife(L, t) {
+  const p = player.pos;
+  // butterflies drift around flower patches near the player
+  const fl = WORLD.props.flowers;
+  let shown = 0;
+  for (let i = 0; i < fl.length && shown < 16; i += 17) {
+    const f = fl[i];
+    if (Math.abs(f.x - p[0]) > 40 || Math.abs(f.z - p[2]) > 40) continue;
+    shown++;
+    const s = i * 0.37, x = f.x + Math.sin(t * 0.6 + s) * 1.6 + Math.sin(t * 1.7 + s * 2) * 0.4, z = f.z + Math.cos(t * 0.5 + s * 1.3) * 1.6;
+    const y = f.y + 0.7 + Math.sin(t * 2.3 + s) * 0.25 + Math.sin(t * 0.7 + s) * 0.3;
+    const dx = Math.cos(t * 0.6 + s) * 0.96 + Math.cos(t * 1.7 + s * 2) * 0.68, dz = -Math.sin(t * 0.5 + s * 1.3) * 0.8;
+    const yaw = Math.atan2(dx, dz), flap = Math.sin(t * 22 + s * 5) * 0.9 + 0.3;
+    const col = BF_COLORS[i % BF_COLORS.length];
+    const root = at(x, y, z); M4.rotY(root, yaw); M4.rotX(root, 0.35); M4.scale(root, 0.1);
+    L.add('bfBody', root, [1, 1, 1, 0], [0.6, 0, 0, 0]);
+    for (const sd2 of [1, -1]) { const w = root.slice(); M4.rotZ(w, sd2 * flap); M4.scale(w, sd2, 1, 1); L.add('bfWing', w, [...col, 0.15], [0.6, 0.3, 0, 0]); }
+  }
+  // birds circling high above the island
+  for (let fk = 0; fk < 2; fk++) for (let b = 0; b < 5; b++) {
+    const a = t * (0.07 + fk * 0.02) + fk * 2.5 + b * 0.05, R = 45 + fk * 20 + (b % 2) * 3;
+    const x = Math.sin(a) * R - (b >> 1) * 1.5 * Math.cos(a), z = Math.cos(a) * R + (b >> 1) * 1.5 * Math.sin(a), y = 34 + fk * 6 + Math.sin(t * 0.8 + b) * 0.8 + (b % 2) * 0.6;
+    const root = at(x, y, z); M4.rotY(root, a + Math.PI / 2); M4.scale(root, 0.55);
+    L.add('birdBody', root, [1, 1, 1, 0], [0.6, 0.2, 0, 0]);
+    const flap = Math.sin(t * 7 + b * 1.3 + fk) * 0.5;
+    for (const sd2 of [1, -1]) { const w = root.slice(); M4.translate(w, sd2 * 0.08, 0.04, 0); M4.rotZ(w, sd2 * flap); M4.scale(w, sd2 * 1.3, 1, 1); L.add('birdWing', w, [1, 1, 1, 0], [0.6, 0.2, 0, 0]); }
+  }
+  // leaves falling from nearby trees, drifting in the wind
+  let nt = 0;
+  for (let i = 0; i < WORLD.props.trees.length && nt < 10; i++) {
+    const tr = WORLD.props.trees[i];
+    if (Math.abs(tr.x - p[0]) > 26 || Math.abs(tr.z - p[2]) > 26) continue;
+    nt++;
+    for (let k = 0; k < 3; k++) {
+      const s = i * 1.7 + k * 2.3, per = 5 + (k % 2) * 2, u = ((t + s * 3) % per) / per;
+      const top = tr.y + 4.2 * tr.s, fall = top * 0 + u * (4.2 * tr.s);
+      const x = tr.x + Math.sin(s) * 1.3 * tr.s + u * 2.2 + Math.sin(t * 2 + s) * 0.3, z = tr.z + Math.cos(s) * 1.3 * tr.s + u * 1.2 + Math.cos(t * 1.6 + s) * 0.3;
+      const y = top - fall + 0.05;
+      const m = at(x, y, z); M4.rotY(m, t * 2 + s); M4.rotX(m, Math.sin(t * 3 + s) * 1.1); M4.rotZ(m, t * 1.3 + s); M4.scale(m, 0.06 * (u < 0.92 ? 1 : (1 - u) / 0.08));
+      L.add('leafBit', m, k === 2 ? [1.25, 0.8, 0.35, 0] : [1, 1, 1, 0], [0.7, 0.2, 0, 0]);
+    }
   }
 }
 function buildCapeTrail() {
@@ -3362,6 +3423,7 @@ async function boot() {
   MESHES = buildMeshes();
   buildHeroProps(MESHES);
   buildGoblin(MESHES);
+  buildLife(MESHES);
   HERO = buildHero();
   resetFoes();
   resetPlayer(START.slice(), Math.PI);
