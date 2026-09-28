@@ -1000,6 +1000,10 @@ function buildHero() {
     P(keepTris(dome, q => q[1] - (q[0] - c[0]) * -0.35 > c[1] - 0.004), [BI.ua(1), BI.chest]);
     for (let j = 0; j < 5; j++) { const a = -1.1 + j * 0.55; P(ellipsoid([c[0] + Math.sin(a) * r[0] * 0.93, c[1] + 0.008 - Math.sin(a) * r[0] * 0.93 * 0.35, c[2] + Math.cos(a) * r[2] * 0.93], [0.0045, 0.0045, 0.0045], HC.gold, 6, 4), [BI.ua(1)]); }
   }
+  // cloak clasp at the front of the cowl: gold boss with a ruby
+  P(ellipsoid([0, 1.336, 0.1], [0.028, 0.028, 0.011], (n0) => Math.hypot(n0[0], n0[1]) > 0.8 ? V.mul(HC.gold, 0.8).concat([5]) : HC.gold, 16, 10), [BI.chest, BI.neck]);
+  P(ellipsoid([0, 1.336, 0.109], [0.012, 0.012, 0.007], mc('#c8102e', 6), 12, 8), [BI.chest, BI.neck]);
+  for (const s of [1, -1]) P(tubeMesh([s * 0.026, 1.338, 0.098], [s * 0.1, 1.345, 0.02], () => 0.0035, (t) => (Math.floor(t * 8) % 2 ? HC.gold : V.mul(HC.gold, 0.7).concat([5])), 6, 8), [BI.chest]);
   // V-neck laces criss-crossing the shirt opening
   const chestZ = (x, y) => -0.006 + 0.112 * Math.sqrt(Math.max(0, 1 - (x / 0.158) ** 2 - ((y - 1.19) / 0.19) ** 2)) + 0.004;
   for (let k = 0; k < 3; k++) {
@@ -1032,6 +1036,9 @@ function buildHero() {
       h.merge(tubeMesh(k1, k2, () => 0.0095, () => HC.skin, 10, 2));
     }
     h.merge(tubeMesh([0.012 * g, 0.03, 0.028], [0.03 * g, 0.068, 0.036], () => 0.012, () => HC.skin, 10, 3));
+    h.merge(ellipsoid([-0.019 * g, 0.052, 0], [0.009, 0.03, 0.027], HC.leatherDark, 12, 8));   // back-of-hand plate
+    h.merge(ellipsoid([-0.027 * g, 0.052, 0], [0.005, 0.006, 0.006], HC.gold, 8, 6));        // stud
+    h.merge(transformed(torusMesh(1, 0.2, 18, 6, HC.leatherDark), M4.scale(at(0, 0.012, 0), 0.028, 0.022, 0.034)));  // wrist strap
     P(transformed(h, M), [BI.hand(s), BI.fa(s)]);
   }
   // ---- legs + boots ----
@@ -1148,7 +1155,18 @@ function buildHeroProps(M) {
   // closed-mouth smile: a thin arc curving up at the corners
   { const pts = []; for (let k = 0; k <= 8; k++) { const x = -1 + k / 4; pts.push([x, 0.35 * x * x, 0]); }
     const sm = new Mesh(); for (let k = 0; k < 8; k++) sm.merge(tubeMesh(pts[k], pts[k + 1], () => 0.16, () => HC.lip, 6, 1)); M.smile = sm; }
-  M.ear = (() => { const e = cylMesh(12, 1, 0.04, 1, HC.skin, true); e.c = e.c.map((v, i) => i % 4 === 3 ? 1 : v); return e; })();
+  M.ear = (() => {
+    const e = cylMesh(16, 1, 0.04, 1, HC.skin, true);
+    for (let k = 0; k < e.vcount; k++) {
+      const inner = e.n[k * 3 + 2] > 0.3 && e.p[k * 3 + 1] > 0.05 && e.p[k * 3 + 1] < 0.8;
+      const c = inner ? V.lerp(HC.skin, HC.blush, 0.6) : HC.skin;
+      e.c[k * 4] = c[0]; e.c[k * 4 + 1] = c[1]; e.c[k * 4 + 2] = c[2]; e.c[k * 4 + 3] = 1;
+    }
+    return e;
+  })();
+  // arched eyebrow
+  { const pts = []; for (let k = 0; k <= 6; k++) { const x = -1 + k / 3; pts.push([x, -0.3 * x * x + 0.15 * x, 0]); }
+    const br = new Mesh(); for (let k = 0; k < 6; k++) br.merge(tubeMesh(pts[k], pts[k + 1], (t) => 0.2 - Math.abs(k + t - 2.2) * 0.03, () => HC.brow, 6, 1)); M.browArc = br; }
   // sword: grip, guard, blade (diamond section), pommel
   {
     const s = new Mesh();
@@ -3046,8 +3064,8 @@ function addHero(L, t) {
     const ir = e.slice(); M4.translate(ir, lx * 0.012, ly * 0.012 - 0.002, 0.0072); M4.scale(ir, 0.0165, 0.02, 0.0055); L.add('iris', hm(ir), [1, 1, 1, 0.12], [0.1, 0, 0, 0]);
     const pu = e.slice(); M4.translate(pu, lx * 0.013, ly * 0.013 - 0.002, 0.0112); M4.scale(pu, 0.009, 0.011, 0.004); L.add('pupil', hm(pu), [1, 1, 1, 0], [0.1, 0, 0, 0]);
     const gl = e.slice(); M4.translate(gl, lx * 0.012 + 0.006, ly * 0.012 + 0.007, 0.0142); M4.scale(gl, 0.0036 * (bl < 1 ? 0 : 1)); L.add('eyeW', hm(gl), [1, 1, 1, 2.2], [0.1, 0, 0, 0]);
-    const br = at(s * 0.047, 1.588 - (fierce ? 0.004 : 0), 0.121); M4.rotY(br, s * 0.3); M4.rotZ(br, -s * (fierce ? 0.32 : 0.1)); M4.scale(br, 0.026, 0.0058, 0.008);
-    L.add('browBlob', hm(br), [1, 1, 1, 0], [0.5, 0, 0, 0]);
+    const br = at(s * 0.047, 1.589 - (fierce ? 0.005 : 0), 0.123); M4.rotY(br, s * 0.3); M4.rotZ(br, -s * (fierce ? 0.3 : 0.06)); M4.scale(br, -s * 0.024, 0.022, 0.01);
+    L.add('browArc', hm(br), [1, 1, 1, 0], [0.5, 0, 0, 0]);
     // pointed ear
     const eb = [s * 0.104, 1.542, 0.004], ed = V.norm([s * 0.85, 0.42, -0.36]), ez = V.norm(V.sub([0, 0, 1], V.mul(ed, ed[2]))), ex = V.cross(ed, ez);
     L.add('ear', hm(axesM(eb, ex, ed, ez, 0.03, 0.1, 0.012)), [1, 1, 1, 0], [0.5, 0.3, 0, 0]);
