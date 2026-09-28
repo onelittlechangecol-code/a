@@ -993,7 +993,7 @@ function buildHero() {
   const hc = HB.headC;
   const cap = ellipsoid(V.add(hc, [0, 0.008, -0.006]), [0.123, 0.145, 0.133], (n0) => {
     const streak = 0.85 + 0.25 * hash2(Math.floor(Math.atan2(n0[0], n0[2]) * 14), 3);
-    return V.mul(V.lerp(HC.hairDark, HC.hair, smooth(-0.6, 0.8, n0[1])), streak).concat([7]);
+    return V.mul(V.lerp(HC.hairDark, HC.hair, 0.15 + 0.35 * smooth(-0.6, 0.9, n0[1])), streak * 0.85).concat([7]);
   }, 34, 26);
   P(keepTris(cap, (p) => { const q = [(p[0] - hc[0]) / 0.123, (p[1] - hc[1] - 0.008) / 0.145, (p[2] - hc[2] + 0.006) / 0.133]; return q[1] > 0.3 || (q[2] < 0.1 && q[1] > -0.5) || (q[2] < 0.4 && q[1] > 0.05 && Math.abs(q[0]) > 0.7); }), [BI.head]);
   P(tubeMesh([0, 1.3, -0.006], [0, 1.46, 0], t => lerp(0.052, 0.046, t), () => HC.skin, 18, 5), [BI.neck, BI.head, BI.chest]);
@@ -1699,6 +1699,12 @@ const LOCKS = (() => {
   for (let row = 0; row < 3; row++) for (let k = 0; k < 13; k++) {
     const x = -0.088 + k * 0.0147 + (row % 2) * 0.0073;
     L.push({ b: [x * (1 - row * 0.05), 1.635 - row * 0.035, -0.118 - row * 0.004 + Math.abs(x) * 0.15], d: [x * 0.7, -1, -0.12 + row * 0.05], len: 0.12 + r() * 0.035 - row * 0.015, w: 0.05, sway: 0.9 });
+  }
+  // crown whorl: locks radiating from a point on the crown and lying flat over the skull in every direction
+  for (let k = 0; k < 22; k++) {
+    const a = k / 22 * Math.PI * 2 + (r() - 0.5) * 0.2, cw = [0.004, 1.672, -0.04];
+    const dir = [Math.sin(a) * 0.8, -0.35 - 0.2 * Math.max(0, Math.cos(a)), Math.cos(a) * 0.8 - 0.2];
+    L.push({ b: V.add(cw, [Math.sin(a) * 0.012, 0, Math.cos(a) * 0.012]), d: dir, len: 0.11 + r() * 0.04, w: 0.05, sway: 0.5 });
   }
   // short tail tied at the nape
   for (let k = 0; k < 5; k++) L.push({ b: [(k - 2) * 0.008, 1.525, -0.128], d: [(k - 2) * 0.1, -1, -0.35], len: 0.15 + r() * 0.035, w: 0.036, sway: 1.4, tail: true });
@@ -2848,7 +2854,7 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
     let d1 = dot(t1, hv); let d2 = dot(t2, hv);
     let s1 = pow(sqrt(max(1.0 - d1 * d1, 0.0)), 90.0); let s2 = pow(sqrt(max(1.0 - d2 * d2, 0.0)), 22.0);
     let lit = smoothstep(-0.1, 0.3, nl) * sh * F.sunDir.w;
-    c += F.sunCol.rgb * (s1 * 0.45 + s2 * base * 0.9) * lit;
+    c += F.sunCol.rgb * (s1 * 0.3 + s2 * base * 0.7) * lit;
   } else {
     c += F.sunCol.rgb * ggx(n, v, l, rough) * sh * F.sunDir.w * fres * (1.0 - rough * 0.4);
   }
@@ -2973,7 +2979,7 @@ fn vnoise3(p: vec3f) -> f32 {
   let pores = vnoise3(p * 1100.0);
   let brushed = vnoise3(vec3f(p.x * 900.0, p.y * 18.0, p.z * 900.0));
   let strands = sin(p.x * 150.0 + vnoise3(vec3f(p.x * 30.0, p.y * 3.0, p.z * 30.0)) * 1.5) * 0.5 + 0.5;
-  let capStr = sin(atan2(p.x, p.z) * 55.0 + vnoise3(p * 35.0) * 3.0) * 0.5 + 0.5;
+  let capStr = sin(atan2(p.x, p.z) * 140.0 + vnoise3(p * 60.0) * 2.0) * 0.5 + 0.5;
   let hairH = mix(strands, capStr, step(1.2, p.y));
   let embH = isEmb * step(p.y, 0.72) * step(0.63, p.y) * (1.0 - smoothstep(0.08, 0.16, abs(abs(fract(atan2(p.x, p.z) * 7.0 / 3.14159) - 0.5) * 2.0 + abs((p.y - 0.676) / 0.02) - 0.75)));
   let leafy = vnoise3(p * 20.0) * 0.6 + vnoise3(p * 52.0) * 0.4;
