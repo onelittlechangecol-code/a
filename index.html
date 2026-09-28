@@ -2278,8 +2278,10 @@ const WGSL_SCENE = WGSL_COMMON + /* wgsl */`
 
 fn skyColor(d: vec3f) -> vec3f {
   let t = clamp(d.y, 0.0, 1.0);
-  var c = mix(F.skyHor.rgb, F.skyTop.rgb, pow(t, 0.5));
   let sd = max(dot(d, F.sunDir.xyz), 0.0);
+  // warm the horizon on the sun's side
+  let hor = mix(F.skyHor.rgb, vec3f(1.0, 0.8, 0.6), pow(sd, 3.0) * 0.55 * (1.0 - t));
+  var c = mix(hor, F.skyTop.rgb, pow(t, 0.5));
   c += F.sunCol.rgb * (pow(sd, 6.0) * 0.22 + pow(sd, 90.0) * 0.8);
   c = mix(c, F.skyHor.rgb * vec3f(0.92, 0.97, 1.0), smoothstep(0.0, -0.25, d.y));
   return c;
@@ -2347,7 +2349,7 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
   let nl = dot(n, l);
   // soft wrap for a painterly, forgiving look
   let wrap = clamp((nl + 0.25) / 1.25, 0.0, 1.0);
-  let hemi = mix(vec3f(0.42, 0.36, 0.28), F.skyTop.rgb * 0.95 + vec3f(0.06), n.y * 0.5 + 0.5);
+  let hemi = mix(vec3f(0.4, 0.34, 0.27), F.skyTop.rgb * 1.05 + vec3f(0.1, 0.12, 0.16), n.y * 0.5 + 0.5);
   let nv = max(dot(n, v), 0.0);
   let F0 = mix(vec3f(0.04), base, metal);
   let fres = F0 + (vec3f(1.0) - F0) * pow(1.0 - nv, 5.0);
@@ -2902,7 +2904,7 @@ function buildStaticInstances() {
 // ============================================================
 //  Per-frame scene assembly
 // ============================================================
-const SUN = V.norm([-0.45, 0.62, 0.55]);
+const SUN = V.norm([-0.5, 0.46, 0.62]);
 function frameUniforms() {
   const f = GR.frameData, asp = GR.w / GR.h;
   const proj = M4.perspective(cam.curFov * Math.PI / 180, asp, 0.1, 900);
@@ -2918,9 +2920,9 @@ function frameUniforms() {
   f.set(vp, 0); f.set(M4.invert(vp), 16); f.set(lvp, 32);
   f.set([...cam.pos, state.time], 48);
   f.set([...SUN, 1.0], 52);
-  f.set([1.55, 1.36, 1.1, 0], 56);          // warm sun
-  f.set([0.22, 0.48, 0.95, 0], 60);          // sky zenith
-  f.set([0.64, 0.79, 0.95, 0], 64);          // horizon haze
+  f.set([1.75, 1.36, 0.98, 0], 56);         // golden afternoon sun
+  f.set([0.16, 0.38, 0.86, 0], 60);          // sky zenith
+  f.set([0.66, 0.78, 0.9, 0], 64);          // horizon haze
   f.set([0.0022, 0.05, WORLD.water, state.shrineAwake ? 1 : 0], 68);
   f.set([GR.w, GR.h, 1 / GR.w, 1 / GR.h], 72);
   f.set([WORLD.size, WORLD.n, 0, 1], 76);
