@@ -999,8 +999,37 @@ function buildHero() {
       return [[BI.pelvis, 1 - k], [BI.thigh(1), k * s], [BI.thigh(-1), k * (1 - s)]];
     });
   }
-  P(transformed(torusMesh(1, 0.13, 40, 8, HC.leatherDark), M4.scale(at(0, 0.958, 0), 0.178, 0.16, 0.134)), [BI.pelvis]);
-  P(ellipsoid([0, 0.958, 0.152], [0.032, 0.026, 0.01], HC.gold, 14, 10), [BI.pelvis]);
+  // belt: a flat leather band with bevelled edges, a stitched groove, brass rivets and a framed buckle
+  {
+    const bc = [0, 0.958, 0], rx = 0.168, rz = 0.126, seg = 72;
+    const prof = [[-0.003, -0.023], [0.006, -0.023], [0.0095, -0.019], [0.0095, -0.014], [0.0085, -0.0125], [0.0095, -0.011], [0.0095, 0.011], [0.0085, 0.0125], [0.0095, 0.014], [0.0095, 0.019], [0.006, 0.023], [-0.003, 0.023]];
+    const m = new Mesh();
+    for (let k = 0; k < prof.length; k++) for (let j = 0; j <= seg; j++) {
+      const a = j / seg * TAU, e = [Math.sin(a) * rx, Math.cos(a) * rz], nn = V.norm([Math.sin(a) / rx, 0, Math.cos(a) / rz]);
+      const [dr, dy] = prof[k], groove = (k >= 3 && k <= 5) || (k >= 6 && k <= 8);
+      m.v([e[0] + nn[0] * dr, bc[1] + dy, e[1] + nn[2] * dr], nn, groove ? HC.leatherDark : V.mul(HC.leather, 0.95).concat([3]));
+    }
+    for (let k = 0; k < prof.length - 1; k++) for (let j = 0; j < seg; j++) { const q = k * (seg + 1) + j, w = q + seg + 1; m.tri(q, w, q + 1); m.tri(q + 1, w, w + 1); }
+    m.recomputeNormals();
+    P(m, [BI.pelvis]);
+    // rivets in pairs around the band, skipping the buckle
+    for (let j = 0; j < 22; j++) {
+      const a = j / 22 * TAU + 0.14; if (Math.abs(Math.sin(a / 2)) < 0.16) continue;
+      const nn = V.norm([Math.sin(a) / rx, 0, Math.cos(a) / rz]), p0 = [Math.sin(a) * (rx + 0.009), bc[1], Math.cos(a) * (rz + 0.009)];
+      for (const dy of [-0.0075, 0.0075]) P(ellipsoid(V.add(p0, [0, dy, 0]), [0.0042, 0.0042, 0.0042], HC.gold, 8, 5, (q) => V.add([q[0] * 0.5 + q[0] * 0.5 * Math.abs(nn[2]), q[1], q[2] * 0.5 + q[2] * 0.5 * Math.abs(nn[0])], [0, 0, 0])), [BI.pelvis]);
+    }
+    // buckle: rounded gold frame, centre bar and prong, with the tongue threaded through
+    const z0 = rz + 0.013, bw = 0.03, bh = 0.029, br = 0.0045;
+    const fr = [[-bw, -bh], [bw, -bh], [bw, bh], [-bw, bh]];
+    for (let k = 0; k < 4; k++) { const a = fr[k], b = fr[(k + 1) % 4]; P(tubeMesh([a[0], bc[1] + a[1], z0], [b[0], bc[1] + b[1], z0], () => br, () => HC.gold, 10, 2), [BI.pelvis]); }
+    P(tubeMesh([-0.004, bc[1] - bh, z0 - 0.002], [-0.004, bc[1] + bh, z0 - 0.002], () => 0.003, () => HC.gold, 8, 2), [BI.pelvis]);
+    P(tubeMesh([-0.004, bc[1], z0 + 0.003], [bw + 0.004, bc[1], z0 + 0.004], () => 0.0026, () => HC.steel, 8, 2), [BI.pelvis]);
+    P(ellipsoid([-bw * 0.52, bc[1], z0 - 0.004], [bw * 0.46, 0.022, 0.004], V.mul(HC.leather, 0.95).concat([3]), 12, 6), [BI.pelvis]);
+    // free end of the strap tucked through a keeper and hanging down the hip
+    P(ellipsoid([bw + 0.022, bc[1], z0 - 0.004], [0.007, 0.026, 0.005], HC.leatherDark, 8, 6), [BI.pelvis]);
+    P(tubeMesh([bw + 0.034, bc[1] + 0.012, z0 - 0.008], [bw + 0.05, bc[1] - 0.09, z0 - 0.002], t => 0.011 - t * 0.002, () => V.mul(HC.leather, 0.95).concat([3]), 10, 6), [BI.pelvis, BI.thigh(-1)]);
+    P(ellipsoid([bw + 0.05, bc[1] - 0.095, z0 - 0.001], [0.011, 0.006, 0.004], HC.gold, 8, 5), [BI.pelvis, BI.thigh(-1)]);
+  }
   P(ellipsoid([-0.172, 0.915, 0.06], [0.042, 0.052, 0.036], HC.leather, 14, 10), [BI.pelvis, BI.thigh(-1)]);
   P(ellipsoid([0.16, 0.92, -0.08], [0.035, 0.045, 0.03], HC.leatherLight, 12, 8), [BI.pelvis, BI.thigh(1)]);
   // baldric across the chest (front and back)
