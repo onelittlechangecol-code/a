@@ -24,20 +24,21 @@ Objetivo: recoge chispas para despertar el santuario de la colina y cruza su por
 ## Qué hay dentro
 
 **Personaje**
-- Modelo construido con código: cabeza con ojos (esclerótica, iris, pupila y brillo), pestañas, cejas, nariz, boca y orejas de elfo; pelo con casquete y 30 mechones; túnica con falda, cinturón, hebilla, bolsas, tahalí y hombrera; mangas, brazales, manos con dedos; pantalón y botas.
-- Esqueleto de 17 huesos con skinning lineal (hasta 3 huesos por vértice): codos, rodillas, hombros y la falda de la túnica se deforman con el movimiento.
-- IK de dos huesos en brazos y piernas; los pies se apoyan en el terreno y la pelvis baja sola en pendientes y al aterrizar.
-- Animación procedural: respiración y cambio de peso en reposo, carrera con giro de cadera y hombros, saltos, voltereta, planeo, combo de espada con estela, ataque giratorio y estocada.
-- Capa de tela simulada con Verlet que choca con el torso y las piernas; mechones de pelo con resortes; mirada y cejas que reaccionan a enemigos y chispas; parpadeo.
-- Materiales por vértice: piel con dispersión subsuperficial, tela con brillo de borde, cuero, acero y oro metálicos, ojos brillantes, pelo.
+- Modelo construido con código: cabeza esculpida (cuencas, pómulos, puente nasal, labios, barbilla), ojos con iris con fibras, pupila y brillo, párpados que parpadean y entrecierran, pestañas, cejas arqueadas, sonrisa, orejas de elfo; pelo con casquete y unos 80 mechones en capas que se curvan pegados al cráneo.
+- Vestuario: túnica con pliegues y bordado de rombos en hilo de oro, cuello plegado, broche con rubí, cordones en el escote, cinturón con hebilla, bolsas, cuchillo al cinto, tahalí, hombrera con relieves y remaches, mangas con arrugas y ribete, brazales, guantes sin dedos con placa y tachuela, rodilleras, botas con correas, hebillas y cordones.
+- Capa hasta las rodillas con escudo del sol bordado, bordes dorados y forro oscuro, simulada como tela que cae sobre el escudo y la vaina.
+- Esqueleto de 17 huesos con skinning lineal, IK de dos huesos en brazos y piernas, pies sobre el terreno y pelvis que baja en pendientes y aterrizajes. Oclusión ambiental precalculada.
+- Animación procedural: reposo con respiración, cambio de peso y miradas, carrera con giro de cadera y hombros, saltos, voltereta, planeo con hoja gigante, combo de espada con estela, ataque giratorio y estocada. Mirada y expresión que reaccionan a enemigos y chispas.
 
 **Jugabilidad**
-- Aceleración y frenado distintos en suelo y aire, coyote time, buffer de salto, salto corto o largo según cuánto mantengas, y un pequeño "cuelgue" en el punto más alto.
-- Doble salto con voltereta, planeo con una hoja gigante, voltereta de esquiva con invulnerabilidad, dash aéreo, estocada descendente con onda expansiva, combo de espada de 3 golpes y ataque giratorio cargado.
-- Hitstop, sacudida de cámara, cambio de FOV y vibración del mando en los impactos.
-- Enemigos que deambulan, persiguen y atacan saltando; se derrotan con la espada, pisándolos, con el dash aéreo o con la estocada.
+- Aceleración distinta en suelo y aire, coyote time, buffer de salto, salto variable y cuelgue en el punto más alto.
+- Doble salto, planeo, voltereta de esquiva con invulnerabilidad, dash aéreo, estocada con onda expansiva, combo de 3 golpes y ataque giratorio cargado.
+- Goblins articulados con garrote: deambulan, persiguen y atacan; aguantan dos golpes, se tambalean con destello, y al caer salen girando y desaparecen en humo.
+- Hitstop, chispas, sacudida de cámara, cambio de FOV y vibración del mando.
 
 **Mundo y render**
-- Isla procedural con terrazas, playa, camino, bosques, rocas, flores, islas flotantes (algunas móviles) y un santuario.
-- WebGPU con MSAA 4x, sombras direccionales con PCF y encuadre estable, iluminación con wrap y especular GGX, niebla atmosférica, cielo con nubes procedurales, agua con olas, fresnel y espuma en la orilla según la profundidad real del terreno, bloom y tonemapping ACES.
+- Isla procedural con terrazas, playa, camino, árboles de copa frondosa con ramas y corteza, rocas con musgo, islas flotantes con estratos y raíces, un santuario con columnas estriadas, glifos brillantes, portal de bloques con remolino de luz y plaza de mosaico con escalones.
+- Vida ambiental: mariposas, bandadas de pájaros y hojas que caen.
+- WebGPU con MSAA 4x, dos cascadas de sombras (una fina alrededor del héroe), materiales por vértice (piel con dispersión subsuperficial, tela con brillo de borde, cuero, metal, pelo con brillo anisótropo, hojas translúcidas), relieve procedural por material (tejido, grano de cuero, poros, piedra, corteza), luz de tarde dorada, niebla atmosférica, cielo con nubes, agua con reflejos planos de la isla, espuma y cáusticas, rayos de sol, bloom, gradación de color y tonemapping ACES.
+- Ajuste de calidad (Alta, Media, Baja) con bajada automática si el juego va lento.
 - Música y efectos sintetizados con Web Audio.

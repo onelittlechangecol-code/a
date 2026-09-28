@@ -2018,9 +2018,13 @@ function fovKick(a) { if (!reduceMotion) cam.fovKick += a; }
 function cameraUpdate(dt, inputCam) {
   const p = player;
   if (state.mode === 'title') {
-    cam.orbit += dt * 0.18;
-    cam.yaw = Math.PI * 0.82 + Math.sin(cam.orbit) * 0.35; cam.pitch = 0.1; cam.dist = 2.6;
-    cam.target = V.add(p.pos, [0.55, 1.22, 0]);
+    // two slow alternating shots: low-angle bust close-up, then a full-body hero shot
+    cam.orbit += dt;
+    const shot = Math.floor(cam.orbit / 9) % 2, u = (cam.orbit % 9) / 9;
+    p.swordOut = 99;
+    if (shot === 0) { cam.yaw = Math.PI * 0.86 + lerp(-0.25, 0.2, u); cam.pitch = lerp(-0.02, 0.06, u); cam.dist = lerp(1.7, 1.4, u); cam.target = V.add(p.pos, [0.3, 1.38, 0]); }
+    else { cam.yaw = Math.PI * 0.8 + lerp(0.3, -0.1, u); cam.pitch = lerp(0.02, 0.12, u); cam.dist = lerp(3.6, 3.0, u); cam.target = V.add(p.pos, [0.6, 0.95, 0]); }
+    cam.curDist = cam.dist;
   } else {
     cam.yaw += inputCam[0]; cam.pitch = clamp(cam.pitch + inputCam[1], -0.2, 1.15);
     if (Math.abs(inputCam[0]) + Math.abs(inputCam[1]) > 1e-4) cam.manualT = 0; else cam.manualT += dt;
@@ -3425,6 +3429,7 @@ function frame(now) {
 
 function show(id, on) { document.getElementById(id).hidden = !on; }
 function startGame() {
+  player.swordOut = 0.5;
   initAudio(); if (AC && AC.state === 'suspended') AC.resume();
   sfx('ui');
   state.mode = 'play';
