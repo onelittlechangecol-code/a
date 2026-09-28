@@ -2408,7 +2408,10 @@ fn shadowAt(wp: vec3f, n: vec3f) -> f32 {
   }
   s2 /= 25.0;
   let w2 = smoothstep(0.0, 0.12, min(min(uv2.x, 1.0 - uv2.x), min(uv2.y, 1.0 - uv2.y))) * step(q.z, 1.0) * step(0.0, q.z);
-  return mix(s1, min(s1 + 0.25, s2), w2);
+  // drifting cloud shadows, projected along the sun direction
+  let cxz = (wp.xz - F.sunDir.xz / max(F.sunDir.y, 0.2) * wp.y) * 0.018 + vec2f(F.camPos.w * 0.01, F.camPos.w * 0.004);
+  let cloud = smoothstep(0.42, 0.58, fbm(cxz));
+  return mix(s1, min(s1 + 0.25, s2), w2) * (1.0 - 0.5 * cloud);
 }
 fn ggx(n: vec3f, v: vec3f, l: vec3f, rough: f32) -> f32 {
   let h = normalize(v + l); let nh = max(dot(n, h), 0.0);
