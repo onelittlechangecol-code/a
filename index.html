@@ -1189,6 +1189,27 @@ function buildHero() {
     }
     P(ellipsoid([0.1 * s, 0.052, 0.05], [0.05, 0.052, 0.108], (n0, q) => q[1] < -0.03 ? HC.sole : (n0[2] > 0.8 ? HC.leatherDark : HC.leather), 20, 14,
       (q) => { if (q[1] < 0) q[1] *= 0.72; if (q[2] > 0) q[1] *= 1 - 0.3 * (q[2] / 0.108); return q; }), [BI.foot(s), BI.shin(s)]);
+    // boot details: folded cuff with a wavy edge, welted sole and stacked heel, instep strap with buckle, stitched toe cap
+    {
+      const ax = V.norm(V.sub(an, kn)), L = V.len(V.sub(an, kn)), cm = new Mesh(), NA = 36;
+      for (let u = 0; u <= 4; u++) for (let j = 0; j <= NA; j++) {
+        const a = j / NA * TAU, t = lerp(0.325, 0.47, u / 4), wav = u === 4 ? 0.012 * Math.cos(a * 6) : 0;
+        const rr = lerp(0.066, 0.07, u / 4) + (u === 0 ? -0.004 : 0);
+        const c = V.lerp(kn, an, t + wav / L), dir = [Math.sin(a), 0, Math.cos(a)];
+        cm.v(V.add(c, V.mul(dir, rr)), dir, u === 0 ? HC.gold : (u === 1 ? V.mul(HC.leatherLight, 0.85).concat([3]) : HC.leatherLight));
+      }
+      for (let u = 0; u < 4; u++) for (let j = 0; j < NA; j++) { const a = u * (NA + 1) + j, b = a + NA + 1; cm.tri(a, a + 1, b); cm.tri(a + 1, b + 1, b); }
+      cm.recomputeNormals();
+      P(cm, [BI.shin(s), BI.thigh(s)]);
+      const fx = 0.1 * s;
+      P(ellipsoid([fx, 0.012, 0.054], [0.047, 0.012, 0.11], (n0) => Math.abs(n0[1]) < 0.35 ? V.mul(HC.sole, 1.6).concat([3]) : HC.sole, 22, 8), [BI.foot(s)]);
+      P(ellipsoid([fx, 0.022, -0.028], [0.043, 0.022, 0.04], (n0) => n0[1] < -0.6 ? HC.sole : V.mul(HC.sole, 1.3).concat([3]), 14, 8), [BI.foot(s), BI.shin(s)]);
+      const arc = []; for (let k = 0; k <= 12; k++) { const a = lerp(-1.9, 1.9, k / 12); arc.push([fx + Math.sin(a) * 0.054, 0.052 + Math.cos(a) * 0.049, 0.035]); }
+      for (let k = 0; k < 12; k++) P(tubeMesh(arc[k], arc[k + 1], () => 0.0055, () => HC.leatherDark, 6, 1, [false, false]), [BI.foot(s)]);
+      P(ellipsoid([fx + s * 0.053, 0.06, 0.035], [0.004, 0.011, 0.011], HC.gold, 8, 6), [BI.foot(s)]);
+      const toe = []; for (let k = 0; k <= 10; k++) { const a = lerp(-1.35, 1.35, k / 10); toe.push([fx + Math.sin(a) * 0.046, 0.044 + Math.cos(a) * 0.028, 0.095 - (1 - Math.cos(a)) * 0.03]); }
+      for (let k = 0; k < 10; k++) P(tubeMesh(toe[k], toe[k + 1], () => 0.0022, () => V.mul(HC.leatherLight, 1.1).concat([3]), 5, 1, [false, false]), [BI.foot(s)]);
+    }
   }
 
   // ---- merge + weights ----
