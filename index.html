@@ -1393,7 +1393,15 @@ function buildHeroProps(M) {
     M.lock = c;
   }
   M.eyeW = ellipsoid([0, 0, 0], [1, 1, 1], (n0) => V.lerp(HC.eyeW, [0.93, 0.76, 0.72], smooth(0.55, 0.95, Math.abs(n0[0])) * 0.6).concat([6]), 24, 16);
-  M.iris = ellipsoid([0, 0, 0], [1, 1, 1], (n0) => V.lerp(HC.irisDark, HC.iris, smooth(0.2, 0.9, Math.hypot(n0[0], n0[1]) < 0.6 ? 1 - Math.hypot(n0[0], n0[1]) : 0.2)).concat([6]), 18, 12);
+  // iris: blue-grey stroma with an amber collarette round the pupil and a dark limbal ring
+  M.iris = ellipsoid([0, 0, 0], [1, 1, 1], (n0) => {
+    const r = Math.hypot(n0[0], n0[1]);
+    if (n0[2] < 0) return HC.irisDark;
+    let c = V.lerp([0.3, 0.5, 0.68], [0.2, 0.36, 0.55], smooth(0.3, 0.8, r));
+    c = V.lerp(c, [0.7, 0.52, 0.26], (1 - smooth(0.22, 0.42, r)) * 0.75);
+    c = V.lerp(c, [0.06, 0.1, 0.16], smooth(0.8, 0.97, r));
+    return c.concat([6]);
+  }, 32, 16);
   M.pupil = ellipsoid([0, 0, 0], [1, 1, 1], HC.pupil, 12, 8);
   M.skinBlob = ellipsoid([0, 0, 0], [1, 1, 1], HC.skin, 14, 10);
   M.lipBlob = ellipsoid([0, 0, 0], [1, 1, 1], [0.2, 0.06, 0.06, 1], 12, 8);
@@ -3590,11 +3598,14 @@ function addHero(L, t) {
   for (const s of [1, -1]) {
     // eyeball: a real-sized sphere; the iris disc and pupil turn with the gaze, lids hinge on its centre
     const E = [s * 0.041, 1.5415, 0.1015], ER = 0.0162;
-    const w = at(E[0], E[1], E[2]); M4.scale(w, ER); L.add('eyeW', hm(w), [0.92, 0.9, 0.88, 0.0], [0.05, 0.1, 0, 0]);
+    const w = at(E[0], E[1], E[2]); M4.scale(w, ER); L.add('eyeW', hm(w), [0.86, 0.83, 0.8, 0.0], [0.05, 0.1, 0, 0]);
     const g = at(E[0], E[1], E[2]); M4.rotY(g, lx * 0.9 + s * 0.04); M4.rotX(g, -ly * 0.9);
     const ir = g.slice(); M4.translate(ir, 0, 0, ER - 0.0014); M4.scale(ir, 0.0079, 0.0079, 0.0022); L.add('iris', hm(ir), [1, 1, 1, 0.1], [0.1, 0, 0, 0]);
-    const pu = g.slice(); M4.translate(pu, 0, 0, ER - 0.0004); M4.scale(pu, 0.0031, 0.0031, 0.0009); L.add('pupil', hm(pu), [1, 1, 1, 0], [0.1, 0, 0, 0]);
+    const pu = g.slice(); M4.translate(pu, 0, 0, ER - 0.0004); M4.scale(pu, 0.0037, 0.0037, 0.001); L.add('pupil', hm(pu), [1, 1, 1, 0], [0.1, 0, 0, 0]);
     const gl = g.slice(); M4.translate(gl, 0.0028, 0.0032, ER + 0.0002); M4.scale(gl, 0.0014 * (bl < 1 ? 0 : 1)); L.add('eyeW', hm(gl), [1, 1, 1, 2.4], [0.1, 0, 0, 0]);
+    const gl2 = g.slice(); M4.translate(gl2, -0.0026, -0.0022, ER - 0.0001); M4.scale(gl2, 0.0007 * (bl < 1 ? 0 : 1)); L.add('eyeW', hm(gl2), [1, 1, 1, 1.4], [0.1, 0, 0, 0]);
+    // caruncle: the pink fold in the inner corner of the eye
+    const ca = at(E[0] - s * ER * 0.93, E[1] - 0.0008, E[2] + ER * 0.3); M4.scale(ca, 0.0026, 0.0034, 0.003); L.add('skinBlob', hm(ca), [1.0, 0.62, 0.6, 0], [0.3, 0.1, 0, 0]);
     // lids: open with the upper edge over the top of the iris; squint when hurt or fierce; meet on a blink
     const aU = bl < 1 ? -0.3 : (hurtEyes < 1 ? 0.08 : (fierce ? 0.26 : 0.5)), aL = bl < 1 ? 0.2 : (hurtEyes < 1 ? 0.16 : (fierce ? 0.26 : 0.4));
     const lu = at(E[0], E[1], E[2]); M4.rotX(lu, -aU); M4.scale(lu, ER * 1.07 * s, ER * 1.07, ER * 1.07); L.add('lidUp', hm(lu), [0.9, 0.84, 0.82, 0], [0.5, 0.2, 0, 0]);
