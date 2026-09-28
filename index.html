@@ -1267,17 +1267,63 @@ function buildHeroProps(M) {
     M.rune = tubeMesh([0, 0.17, 0], [0, 0.78, 0], () => 0.0035, () => [1, 1, 1, 0], 6, 2);
   }
   M.scabbard = (() => { const m = tubeMesh([0, 0.13, 0], [0, 0.95, 0], t => lerp(0.034, 0.024, t), (t) => t < 0.07 || t > 0.93 ? HC.gold : HC.leather, 12, 8); for (let k = 0; k < m.vcount; k++) m.p[k * 3 + 2] *= 0.45; return m; })();
-  // round shield: planks, steel rim, gold boss, painted sun
+  // round shield: fitted planks with grain and seams, iron bands, painted sun crest, steel rim, gold boss
   {
-    const sh = new Mesh();
-    sh.merge(cylMesh(40, 0.25, 0.25, 0.035, HC.wood, true, (p, n) => {
-      const r = Math.hypot(p[0], p[2]);
-      if (n[1] > 0.5 && r < 0.13 && r > 0.1) return HC.trim;
-      if (n[1] > 0.5 && r < 0.1) return mc('#1f6f8b', 2);
-      return V.mul(HC.wood, 0.85 + 0.25 * hash2(Math.floor(p[0] * 20), 1)).concat([3]);
-    }));
-    sh.merge(transformed(torusMesh(0.25, 0.018, 40, 8, HC.steel), at(0, 0.018, 0)));
-    sh.merge(ellipsoid([0, 0.035, 0], [0.045, 0.03, 0.045], HC.gold, 14, 8));
+    const sh = new Mesh(), R = 0.25, H = 0.035, SEG = 128, RINGS = 48;
+    const plank = (x, z, shade) => {
+      const u = (x + R) / 0.0714, id = Math.floor(u), f = u - id;
+      const tone = 0.78 + 0.3 * hash2(id, 7), grain = 0.92 + 0.08 * Math.sin(z * 90 + Math.sin(z * 13 + id) * 3 + id * 5) + 0.05 * Math.sin(z * 310 + id);
+      const seam = f < 0.05 || f > 0.95 ? 0.45 : 1;
+      return V.mul(HC.wood, tone * grain * seam * shade).concat([3]);
+    };
+    const iron = [0.36, 0.37, 0.4, 4];
+    const face = (front) => {
+      const base = sh.vcount, y0 = front ? H : 0;
+      for (let i = 0; i <= RINGS; i++) for (let j = 0; j <= SEG; j++) {
+        const r = i / RINGS * R, a = j / SEG * TAU, x = Math.sin(a) * r, z = Math.cos(a) * r;
+        const dome = front ? 0.014 * (1 - (r / R) ** 2) : 0;
+        const nn = front ? V.norm([x * 0.22 / R, 1, z * 0.22 / R]) : [0, -1, 0];
+        let c;
+        if (front) {
+          const ray = Math.abs(((Math.atan2(x, z) / TAU * 16) % 1 + 1) % 1 - 0.5) * 2;
+          if (r < 0.155) c = (r > 0.05 && ray < 1 - (r - 0.05) / 0.1) || r < 0.062 ? HC.trim : mc('#1f6f8b', 2);
+          else if (r < 0.168) c = HC.trim;
+          else c = plank(x, z, 1);
+        } else {
+          c = Math.abs(x) < 0.03 ? V.mul(HC.wood, 0.6).concat([3]) : plank(x, z, 0.85);
+        }
+        sh.v([x, y0 + dome, z], nn, c);
+      }
+      for (let i = 0; i < RINGS; i++) for (let j = 0; j < SEG; j++) {
+        const a = base + i * (SEG + 1) + j, b = a + SEG + 1;
+        if (front) { sh.tri(a, b, a + 1); sh.tri(a + 1, b, b + 1); } else { sh.tri(a, a + 1, b); sh.tri(a + 1, b + 1, b); }
+      }
+    };
+    face(true); face(false);
+    sh.merge(cylMesh(SEG, R, R, H, HC.wood, false));
+    sh.merge(transformed(torusMesh(R, 0.018, 64, 8, HC.steel), at(0, H * 0.55, 0)));
+    // iron bands: raised strips following the dome
+    for (const zc of [0.125, -0.125]) {
+      const xw = Math.sqrt(0.232 * 0.232 - zc * zc), base = sh.vcount, N = 40;
+      for (let k = 0; k <= N; k++) for (const dz of [-0.013, -0.011, 0.011, 0.013]) {
+        const x = lerp(-xw, xw, k / N), z = zc + dz, top = Math.abs(dz) < 0.012;
+        const y = H + 0.014 * (1 - (x * x + z * z) / (R * R)) + (top ? 0.004 : 0.0005);
+        sh.v([x, y, z], top ? V.norm([x * 0.22 / R, 1, z * 0.22 / R]) : V.norm([0, 0.4, Math.sign(dz)]), iron);
+      }
+      for (let k = 0; k < N; k++) for (let q = 0; q < 3; q++) { const a = base + k * 4 + q, b = a + 4; sh.tri(a, a + 1, b); sh.tri(a + 1, b + 1, b); }
+    }
+    // rivets around the rim and along the iron bands
+    for (let k = 0; k < 20; k++) { const a = k / 20 * TAU; sh.merge(ellipsoid([Math.sin(a) * 0.222, H + 0.0035, Math.cos(a) * 0.222], [0.0065, 0.004, 0.0065], HC.gold, 8, 5)); }
+    for (const z of [0.125, -0.125]) for (const x of [-0.17, -0.1, 0.1, 0.17]) if (Math.hypot(x, z) < 0.235) sh.merge(ellipsoid([x, H + 0.014 * (1 - (x * x + z * z) / (R * R)) + 0.005, z], [0.006, 0.004, 0.006], HC.steel, 8, 5));
+    sh.merge(ellipsoid([0, H + 0.012, 0], [0.05, 0.034, 0.05], HC.gold, 18, 10));
+    sh.merge(transformed(torusMesh(0.05, 0.006, 24, 6, HC.gold), at(0, H + 0.013, 0)));
+    // back: wooden brace and two leather arm straps with buckles
+    sh.merge(tubeMesh([0, -0.012, -0.21], [0, -0.012, 0.21], () => 0.014, () => V.mul(HC.wood, 0.7).concat([3]), 8, 4));
+    for (const x of [-0.08, 0.08]) {
+      sh.merge(tubeMesh([x, -0.006, -0.13], [x, -0.03, 0], () => 0.009, () => HC.leather, 8, 3));
+      sh.merge(tubeMesh([x, -0.03, 0], [x, -0.006, 0.13], () => 0.009, () => HC.leather, 8, 3));
+      sh.merge(ellipsoid([x, -0.022, 0.07], [0.014, 0.004, 0.012], HC.gold, 8, 5));
+    }
     M.shield = sh;
   }
   // giant leaf glider
