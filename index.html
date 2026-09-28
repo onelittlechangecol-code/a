@@ -1175,16 +1175,39 @@ function buildHero() {
     const y = V.norm(V.sub(ha, wr)), z = V.norm(V.sub([0, 0, 1], V.mul(y, y[2]))), x = V.cross(y, z);
     const M = new Float32Array([...x, 0, ...y, 0, ...z, 0, ...wr, 1]);
     const h = new Mesh(), g = s; // inward is +x local on both sides after the basis flip
-    h.merge(ellipsoid([0, 0.045, 0], [0.024, 0.042, 0.032], HC.leather, 16, 12));
+    // palm: a flattened, slightly boxy glove shell
+    h.merge(ellipsoid([0, 0.045, 0], [0.021, 0.042, 0.035], HC.leather, 18, 14, (q) => { q[2] *= 1 + 0.12 * (1 - Math.abs(q[1]) / 0.042); return q; }));
+    // fingers: three tapering phalanges each, knuckles, nails on the back of the tips; middle finger longest
+    const nail = [0.93, 0.78, 0.74, 1];
+    const seg3 = (p0, zz, lens, angs, r0) => {
+      let p = p0, th = 0;
+      for (let k = 0; k < 3; k++) {
+        th += angs[k];
+        const d = [Math.sin(th) * g, Math.cos(th), 0], q = V.add(p, V.mul(d, lens[k])), r = r0 * (1 - k * 0.12);
+        h.merge(tubeMesh(p, q, (t) => lerp(r, r * 0.9, t), () => HC.skin, 10, 2, [k === 0, k === 2]));
+        h.merge(ellipsoid(p, [r * 1.12, r * 1.05, r * 1.12], HC.skin, 8, 6));
+        if (k === 2) {
+          const nb = [-Math.cos(th) * g, Math.sin(th), 0], c = V.add(V.lerp(p, q, 0.62), V.mul(nb, r * 0.82));
+          h.merge(transformed(ellipsoid([0, 0, 0], [1, 1, 1], nail, 8, 6), new Float32Array([nb[0] * 0.0018, nb[1] * 0.0018, 0, 0, d[0] * r * 0.85, d[1] * r * 0.85, 0, 0, 0, 0, r * 0.8, 0, c[0], c[1], c[2], 1])));
+        }
+        p = q;
+      }
+    };
     for (let f = 0; f < 4; f++) {
-      const zz = 0.024 - f * 0.016, len = f === 3 ? 0.8 : 1;
-      const k0 = [0.002 * g, 0.08, zz], k1 = [0.014 * g, 0.108 * len + 0.004, zz], k2 = [0.034 * g, 0.114 * len + 0.004, zz];
-      h.merge(tubeMesh(k0, k1, () => 0.0105, () => HC.skin, 10, 2));
-      h.merge(tubeMesh(k1, k2, () => 0.0095, () => HC.skin, 10, 2));
+      const zz = 0.025 - f * 0.0165, L = [1, 1.08, 1.0, 0.8][f], r0 = [0.0092, 0.0095, 0.009, 0.0078][f];
+      seg3([0.001 * g, 0.08 - Math.abs(f - 1.2) * 0.003, zz], zz, [0.024 * L, 0.016 * L, 0.013 * L], [0.45 + f * 0.05, 0.95, 0.55], r0);
     }
-    h.merge(tubeMesh([0.012 * g, 0.03, 0.028], [0.03 * g, 0.068, 0.036], () => 0.012, () => HC.skin, 10, 3));
-    h.merge(ellipsoid([-0.019 * g, 0.052, 0], [0.009, 0.03, 0.027], HC.leatherDark, 12, 8));   // back-of-hand plate
-    h.merge(ellipsoid([-0.027 * g, 0.052, 0], [0.005, 0.006, 0.006], HC.gold, 8, 6));        // stud
+    // thumb: two phalanges from the base of the palm, curling across
+    {
+      const a = [0.012 * g, 0.028, 0.03], b = [0.024 * g, 0.052, 0.04], c2 = [0.036 * g, 0.07, 0.036];
+      h.merge(tubeMesh(a, b, (t) => lerp(0.0125, 0.0105, t), () => HC.skin, 10, 2));
+      h.merge(ellipsoid(b, [0.0112, 0.0112, 0.0112], HC.skin, 8, 6));
+      h.merge(tubeMesh(b, c2, (t) => lerp(0.0102, 0.0088, t), () => HC.skin, 10, 2, [false, true]));
+      const d = V.norm(V.sub(c2, b)), nb = V.norm(V.cross(d, [0, 0, g])), cc = V.add(V.lerp(b, c2, 0.62), V.mul(nb, 0.0075));
+      h.merge(transformed(ellipsoid([0, 0, 0], [1, 1, 1], nail, 8, 6), new Float32Array([nb[0] * 0.0018, nb[1] * 0.0018, nb[2] * 0.0018, 0, d[0] * 0.0078, d[1] * 0.0078, d[2] * 0.0078, 0, 0, 0, 0.007, 0, cc[0], cc[1], cc[2], 1])));
+    }
+    h.merge(ellipsoid([-0.0175 * g, 0.05, 0.002], [0.0045, 0.026, 0.024], (n0) => Math.hypot(n0[1], n0[2]) > 0.85 ? HC.leather : HC.leatherDark, 14, 8));   // back-of-hand plate
+    h.merge(ellipsoid([-0.0218 * g, 0.05, 0.002], [0.0025, 0.004, 0.004], HC.gold, 8, 6));        // stud
     h.merge(transformed(torusMesh(1, 0.2, 18, 6, HC.leatherDark), M4.scale(at(0, 0.012, 0), 0.028, 0.022, 0.034)));  // wrist strap
     P(transformed(h, M), [BI.hand(s), BI.fa(s)]);
   }
