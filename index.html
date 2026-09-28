@@ -1530,7 +1530,7 @@ function doJump(mult) {
 }
 function onLand(impact) {
   const p = player, k = clamp(impact / 22, 0, 1);
-  p.sqv += 2.5 + k * 8; p.landT = 0.15;
+  p.sqv += 2.5 + k * 8; p.landT = 0.28; p.landK = k;
   if (impact > 6) { dust(p.pos, 5 + Math.round(k * 12), 1 + k); sfx('land', k); }
   if (p.pound) {
     p.pound = false; shake(0.9); hitstop(0.07); sfx('pound'); fovKick(-4);
@@ -1589,16 +1589,21 @@ function computePose(st, t) {
       break;
     }
     case 'run': {
-      const ph = p.runPh, st2 = 0.36 * Math.min(1, s), lift = 0.2 * Math.min(1, s);
-      for (const [k, side, off, i] of [['fl', 0.11, 0, 0], ['fr', -0.11, Math.PI, 1]]) {
-        const a = ph + off;
-        o[k] = [side, 0.09 + Math.max(0, Math.cos(a)) * lift, Math.sin(a) * st2 + 0.04];
-        o.lift[i] = Math.max(0, Math.cos(a)) * lift; o.pitch[i] = -0.5 * Math.sin(a) * Math.min(1, s);
+      const ph = p.runPh, m1 = Math.min(1, s), st2 = 0.38 * m1, lift = 0.26 * m1;
+      for (const [k, side, off, i] of [['fl', 0.105, 0, 0], ['fr', -0.105, Math.PI, 1]]) {
+        const a = ph + off, sw = Math.max(0, Math.cos(a));
+        // swing phase: knee drives up and forward; stance: foot planted and pushed back
+        o[k] = [side, 0.09 + sw * lift + Math.pow(sw, 3) * 0.08 * m1, Math.sin(a) * st2 + 0.05 + sw * 0.05 * m1];
+        o.lift[i] = sw * lift; o.pitch[i] = -0.55 * Math.sin(a) * m1 + (sw > 0.2 ? 0.15 : 0);
       }
-      o.hl = [0.27, 0.96 + 0.04 * s + Math.abs(Math.sin(ph)) * 0.03, -Math.sin(ph) * 0.3 * Math.min(1, s) + 0.06];
-      o.hr = [-0.27, 0.96 + 0.04 * s + Math.abs(Math.sin(ph)) * 0.03, Math.sin(ph) * 0.3 * Math.min(1, s) + 0.06];
-      o.pel = [0, -0.025 * s - 0.03 * s * Math.abs(Math.cos(ph)), 0];
-      o.twP = -Math.sin(ph) * 0.16 * s; o.twC = Math.sin(ph) * 0.34 * s; o.lean = 0.16 * s; o.mouth = 0.3;
+      // elbows bent near 90 degrees, hands pumping close to the body
+      const pumpL = -Math.sin(ph), pumpR = Math.sin(ph);
+      o.hl = [0.22 - Math.max(0, pumpL) * 0.05, 1.02 + Math.max(0, pumpL) * 0.1 * m1, 0.08 + pumpL * 0.3 * m1];
+      o.hr = [-0.22 + Math.max(0, pumpR) * 0.05, 1.02 + Math.max(0, pumpR) * 0.1 * m1, 0.08 + pumpR * 0.3 * m1];
+      o.pel = [0, -0.03 * s - 0.035 * s * Math.abs(Math.cos(ph)), 0];
+      o.twP = -Math.sin(ph) * 0.18 * s; o.twC = Math.sin(ph) * 0.36 * s;
+      // lean into acceleration, lean back while braking
+      o.lean = 0.18 * s + clamp((rig.accel || 0) * 0.012, -0.25, 0.2); o.mouth = 0.3;
       if (o.sword === 'guard') { o.hr = [-0.3, 0.95, -0.08]; o.blade = V.norm([-0.3, -0.45, -0.85]); }
       break;
     }
@@ -1631,6 +1636,13 @@ function computePose(st, t) {
     case 'hurt': o.hl = [0.36, 1.2 + Math.sin(t * 30) * 0.05, -0.1]; o.hr = [-0.36, 1.2 + Math.cos(t * 30) * 0.05, -0.1]; o.fl = [0.14, 0.2, 0.1]; o.fr = [-0.14, 0.14, 0.12]; o.lean = -0.3; o.mouth = 0.9; break;
   }
   if (o.sword === 'guard' && !o.blade) guard();
+  // heavy landing: crouch, hands forward to absorb the impact
+  if (p.landT > 0 && (st === 'idle' || st === 'run') && (p.landK || 0) > 0.35) {
+    const k = Math.sin((1 - p.landT / 0.28) * Math.PI) * p.landK;
+    o.pel[1] -= 0.16 * k; o.lean += 0.25 * k;
+    o.hl = V.lerp(o.hl, [0.3, 0.72, 0.25], k); if (o.sword !== 'guard') o.hr = V.lerp(o.hr, [-0.3, 0.72, 0.25], k);
+    o.fl = V.lerp(o.fl, [0.15, 0.09, 0.08], k); o.fr = V.lerp(o.fr, [-0.15, 0.09, -0.06], k);
+  }
   return o;
 }
 
@@ -1643,6 +1655,8 @@ function updateRig(dt, time) {
     rig.prevPos = p.pos.slice(); rig.cape = null;
   }
   const S = rig.s, k = 1 - Math.exp(-dt * (st === 'attack' ? 22 : 12));
+  const spNow = Math.hypot(p.vel[0], p.vel[2]);
+  rig.accel = damp(rig.accel || 0, (spNow - (rig.pSp || 0)) / dt, 8, dt); rig.pSp = spNow;
   S.lean += (pose.lean - S.lean) * k; S.twP += (pose.twP - S.twP) * k; S.twC += (pose.twC - S.twC) * k; S.breath += (pose.breath - S.breath) * k;
   for (let i = 0; i < 3; i++) S.pel[i] += (pose.pel[i] - S.pel[i]) * k;
   S.leaf = damp(S.leaf, pose.leaf, 12, dt); S.glow = damp(S.glow, pose.glow, 10, dt);
