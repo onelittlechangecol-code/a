@@ -1225,12 +1225,35 @@ function buildGoblin(M) {
     for (const [x, y, z] of [[0.16, 0.66, 0.17], [-0.2, 0.52, 0.12], [0.05, 0.75, -0.2]]) b.merge(ellipsoid([x, y, z], [0.02, 0.02, 0.02], G.skinDark, 8, 6));
     // shoulder mounds
     for (const s of [1, -1]) b.merge(ellipsoid([0.24 * s, 0.73, -0.01], [0.09, 0.08, 0.09], G.skin, 14, 10));
+    // leather strap across the chest, bone necklace, skull pauldron, ragged loincloth fringe
+    const sp = [[0.2, 0.78, 0.1], [0.08, 0.66, 0.24], [-0.08, 0.52, 0.27], [-0.2, 0.42, 0.2]];
+    for (let k = 0; k < sp.length - 1; k++) b.merge(tubeMesh(sp[k], sp[k + 1], () => 0.022, () => G.leather, 8, 2));
+    b.merge(ellipsoid([-0.08, 0.52, 0.28], [0.03, 0.03, 0.012], mc('#9a9aa2', 4), 10, 6));
+    for (let k = 0; k < 9; k++) {
+      const a = -1.2 + k * 0.3, x = Math.sin(a) * 0.19, z = Math.cos(a) * 0.17 + 0.02;
+      b.merge(ellipsoid([x, 0.79 - Math.abs(a) * 0.03, z], [0.014, 0.03, 0.012], G.bone, 8, 6));
+    }
+    b.merge(transformed(torusMesh(0.18, 0.006, 24, 4, G.rope), M4.scale(at(0, 0.8, 0.02), 1, 1, 0.95)));
+    const sk = new Mesh();
+    sk.merge(ellipsoid([0, 0, 0], [0.1, 0.08, 0.1], (n0) => (n0[2] > 0.5 && Math.abs(Math.abs(n0[0]) - 0.35) < 0.18 && Math.abs(n0[1] - 0.1) < 0.2 ? G.pupil : G.bone), 16, 12));
+    b.merge(sk, M4.rotY(at(0.25, 0.8, 0.0), 0.9));
+    for (let k = 0; k < 10; k++) {
+      const a = k / 10 * TAU, r = 0.285, x0 = Math.sin(a) * r, z0 = Math.cos(a) * r, len = 0.06 + (k % 3) * 0.025;
+      b.merge(tubeMesh([x0, 0.2, z0], [x0 * 1.05, 0.2 - len, z0 * 1.05], (t) => lerp(0.03, 0.006, t), () => V.mul(G.leather, 0.8).concat([3]), 5, 2));
+    }
     M.gobBody = b;
   }
   // head: brow ridge, snout, jaw with tusks, big pointed ears, one horn
   {
     const h = new Mesh();
-    h.merge(ellipsoid([0, 0.17, 0.0], [0.19, 0.17, 0.18], G.skin, 28, 20, (q, n0) => { if (n0[1] > 0.25 && n0[2] > 0.3) q[2] += 0.02 * n0[1]; return q; }));
+    h.merge(ellipsoid([0, 0.17, 0.0], [0.19, 0.17, 0.18], (n0) => {
+      // war paint: two pale stripes across each cheek
+      const cheek = n0[2] > 0.35 && Math.abs(n0[0]) > 0.35 && Math.abs(n0[0]) < 0.85;
+      const stripe = cheek && (Math.abs(n0[1] + 0.05 - Math.abs(n0[0]) * 0.2) < 0.045 || Math.abs(n0[1] + 0.18 - Math.abs(n0[0]) * 0.2) < 0.04);
+      return stripe ? mc('#e9e2d0', 1) : G.skin;
+    }, 32, 24, (q, n0) => { if (n0[1] > 0.25 && n0[2] > 0.3) q[2] += 0.02 * n0[1]; return q; }));
+    for (let k = 0; k < 6; k++) { const x = -0.05 + k * 0.02; h.merge(cylMesh(5, 0.008, 0.0, 0.025, G.bone, false), M4.rotX(at(x, 0.055, 0.195 - Math.abs(x) * 0.3), 0.2)); }  // teeth
+    for (const s of [1, -1]) h.merge(transformed(torusMesh(0.02, 0.004, 14, 5, mc('#e2b24f', 5)), M4.rotZ(at(0.26 * s, 0.17, -0.02), Math.PI / 2)));  // ear hoops
     h.merge(ellipsoid([0, 0.2, 0.15], [0.14, 0.035, 0.05], G.skinDark, 18, 8));                      // brow ridge
     h.merge(ellipsoid([0, 0.1, 0.17], [0.07, 0.055, 0.06], G.skin, 16, 10));                          // snout
     for (const s of [1, -1]) h.merge(ellipsoid([0.025 * s, 0.1, 0.225], [0.012, 0.01, 0.008], G.pupil, 8, 6)); // nostrils
