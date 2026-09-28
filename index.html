@@ -643,7 +643,7 @@ function buildWorld() {
     props.rocks.push({ x, z, y, s, v: Math.floor(srand() * 3), yaw: srand() * TAU });
     solids.push({ x, z, r: 0.85 * s, top: y + 0.75 * s, bottom: y - 2, kind: 'rock' });
   }
-  for (let tries = 0; tries < 30000 && props.tufts.length < 2600; tries++) {
+  for (let tries = 0; tries < 60000 && props.tufts.length < 5200; tries++) {
     const x = (srand() - 0.5) * 150, z = (srand() - 0.5) * 150;
     if (!okLand(x, z, 1.4, 22, 0.82) || pathDist(x, z) < 1.4) continue;
     props.tufts.push({ x, z, y: heightAt(x, z), s: 0.6 + srand() * 0.8, yaw: srand() * TAU });
@@ -966,11 +966,16 @@ function buildHero() {
   const strap = (pts) => { for (let i = 0; i < pts.length - 1; i++) P(tubeMesh(pts[i], pts[i + 1], () => 0.012, () => HC.leather, 8, 2), [BI.chest, BI.spine]); };
   strap([[0.12, 1.33, 0.06], [0.05, 1.24, 0.112], [-0.04, 1.12, 0.113], [-0.12, 1.0, 0.13], [-0.17, 0.96, 0.08]]);
   strap([[0.12, 1.33, -0.07], [0.04, 1.22, -0.104], [-0.06, 1.1, -0.1], [-0.13, 0.98, -0.07]]);
-  // left pauldron: overlapping armour lames stepping down the shoulder, thin gold edge, rivets
-  for (let k = 0; k < 3; k++) {
-    const c = [0.182 + k * 0.02, 1.338 - k * 0.036, -0.008], r = [0.08 + k * 0.006, 0.046, 0.08 + k * 0.006], cut = c[1] - 0.004;
-    P(keepTris(ellipsoid(c, r, (n0) => n0[1] < 0.16 ? HC.gold : (k === 0 ? HC.leatherLight : HC.leather), 28, 16), q => q[1] > cut), [BI.ua(1), BI.chest]);
-    for (let j = 0; j < 4; j++) { const a = -0.8 + j * 0.53; P(ellipsoid([c[0] + Math.sin(a) * r[0] * 0.9, c[1] + 0.012, c[2] + Math.cos(a) * r[2] * 0.9], [0.0045, 0.0045, 0.0045], HC.gold, 6, 4), [BI.ua(1)]); }
+  // left pauldron: one domed plate following the shoulder slope, embossed ridges, gold rim and rivets
+  {
+    const c = [0.19, 1.325, -0.01], r = [0.092, 0.062, 0.09];
+    const dome = ellipsoid(c, r, (n0) => {
+      const ring = Math.hypot(n0[0] * 0.6, n0[2]);
+      if (n0[1] < 0.18) return HC.gold;
+      return (Math.abs(n0[1] - 0.55) < 0.07 || Math.abs(n0[1] - 0.82) < 0.05) ? HC.leatherDark : HC.leatherLight;
+    }, 30, 18, (q, n0) => { q[1] -= q[0] * 0.35; if (Math.abs(n0[1] - 0.55) < 0.07 || Math.abs(n0[1] - 0.82) < 0.05) q = V.add(q, V.mul(n0, 0.004)); return q; });
+    P(keepTris(dome, q => q[1] - (q[0] - c[0]) * -0.35 > c[1] - 0.004), [BI.ua(1), BI.chest]);
+    for (let j = 0; j < 5; j++) { const a = -1.1 + j * 0.55; P(ellipsoid([c[0] + Math.sin(a) * r[0] * 0.93, c[1] + 0.008 - Math.sin(a) * r[0] * 0.93 * 0.35, c[2] + Math.cos(a) * r[2] * 0.93], [0.0045, 0.0045, 0.0045], HC.gold, 6, 4), [BI.ua(1)]); }
   }
   // ---- arms + hands ----
   for (const s of [1, -1]) {
@@ -1076,7 +1081,8 @@ function buildHeroProps(M) {
   {
     const c = new Mesh(), seg = 10, rings = 10;
     for (let r = 0; r <= rings; r++) {
-      const t = r / rings, w = 0.5 * (1 - Math.pow(t, 1.7)) + 0.03, th = w * 0.24 + 0.01, bend = t * t * 0.42, tw = t * 0.5;
+      // z is scaled by the lock length at draw time, so thickness is divided down and the bend is a fraction of length
+      const t = r / rings, w = 0.5 * (1 - Math.pow(t, 2.2)) + 0.07, th = (w * 0.24 + 0.012) * 0.4, bend = -t * t * 0.3, tw = t * 0.4;
       for (let s = 0; s <= seg; s++) {
         const a = s / seg * TAU, x0 = Math.cos(a) * w, z0 = Math.sin(a) * th;
         const x = x0 * Math.cos(tw) - z0 * Math.sin(tw), z = x0 * Math.sin(tw) + z0 * Math.cos(tw);
@@ -1207,25 +1213,25 @@ function buildGoblin(M) {
 const LOCKS = (() => {
   const L = [], hc = HB.headC;
   let sd0 = 3; const r = () => { sd0 = (sd0 * 16807) % 2147483647; return sd0 / 2147483647; };
-  // fringe: two layers swept to one side
+  // fringe: two layers swept to one side, curling in toward the brow
   for (let layer = 0; layer < 2; layer++) for (let k = 0; k < 9; k++) {
     const x = -0.088 + k * 0.022 + layer * 0.011;
-    L.push({ b: [x, 1.652 - Math.abs(x) * 0.3 + layer * 0.006, 0.096 - layer * 0.008], d: [x * 3 + 0.38 + (r() - 0.5) * 0.2, -1, 0.7], len: 0.068 + r() * 0.03 - layer * 0.01, w: 0.05, sway: 0.6 });
+    L.push({ b: [x, 1.652 - Math.abs(x) * 0.3 + layer * 0.006, 0.096 - layer * 0.008], d: [x * 2.6 + 0.35 + (r() - 0.5) * 0.2, -1, 0.55], len: 0.075 + r() * 0.03 - layer * 0.01, w: 0.052, sway: 0.6 });
   }
-  // crown: layered locks sweeping back
+  // crown: layered locks sweeping back over the skull
   for (let row = 0; row < 3; row++) for (let k = 0; k < 7; k++) {
     const x = -0.072 + k * 0.024;
-    L.push({ b: [x * 0.95, 1.668 - row * 0.014, 0.05 - row * 0.05 - Math.abs(x) * 0.2], d: [x * 1.5 + (r() - 0.5) * 0.25, -0.22 - row * 0.3, -1], len: 0.13 + r() * 0.04, w: 0.065, sway: 0.8 });
+    L.push({ b: [x * 0.95, 1.668 - row * 0.016, 0.05 - row * 0.055 - Math.abs(x) * 0.2], d: [x * 1.2 + (r() - 0.5) * 0.2, -0.3 - row * 0.25, -1], len: 0.14 + r() * 0.04, w: 0.07, sway: 0.8 });
   }
   // sides framing the face, ears poke through
-  for (const s of [1, -1]) for (let k = 0; k < 4; k++) L.push({ b: [0.106 * s, 1.598 - k * 0.01, 0.07 - k * 0.045], d: [0.3 * s, -1, 0.22 - k * 0.1], len: 0.11 + k * 0.02 + r() * 0.02, w: 0.05, sway: 0.7 });
-  // back layers down to the nape
-  for (let row = 0; row < 2; row++) for (let k = 0; k < 8; k++) {
-    const x = -0.084 + k * 0.024;
-    L.push({ b: [x, 1.62 - row * 0.04, -0.116 - row * 0.012], d: [x * 1.2, -1, -0.3 - row * 0.1], len: 0.13 + r() * 0.04, w: 0.058, sway: 0.9 });
+  for (const s of [1, -1]) for (let k = 0; k < 4; k++) L.push({ b: [0.108 * s, 1.598 - k * 0.01, 0.07 - k * 0.045], d: [0.18 * s, -1, 0.12 - k * 0.08], len: 0.1 + k * 0.018 + r() * 0.02, w: 0.058, sway: 0.7 });
+  // back: three overlapping layers hugging the skull down to the nape
+  for (let row = 0; row < 3; row++) for (let k = 0; k < 9; k++) {
+    const x = -0.088 + k * 0.022 + (row % 2) * 0.011;
+    L.push({ b: [x * (1 - row * 0.05), 1.635 - row * 0.035, -0.118 - row * 0.004 + Math.abs(x) * 0.15], d: [x * 0.7, -1, -0.12 + row * 0.05], len: 0.12 + r() * 0.03 - row * 0.015, w: 0.068, sway: 0.9 });
   }
-  // short tail tied at the back
-  for (let k = 0; k < 4; k++) L.push({ b: [(k - 1.5) * 0.014, 1.56, -0.13], d: [(k - 1.5) * 0.35, -0.8, -1], len: 0.2 + r() * 0.04, w: 0.055, sway: 1.6, tail: true });
+  // short tail tied at the nape
+  for (let k = 0; k < 3; k++) L.push({ b: [(k - 1) * 0.014, 1.525, -0.128], d: [(k - 1) * 0.15, -1, -0.35], len: 0.15 + r() * 0.03, w: 0.05, sway: 1.4, tail: true });
   for (const l of L) { l.d = V.norm(l.d); l.out = V.norm(V.sub(l.b, hc)); }
   return L;
 })();
@@ -2785,7 +2791,7 @@ function buildStaticInstances() {
     L.add('canopy' + ((t.v + 1) % 3), c2, [1, 1, 1, 0], [0.8, 0.25, 0.05, 1.0]);
   }
   for (const r of P.rocks) { const m = at(r.x, r.y - 0.15 * r.s, r.z); M4.rotY(m, r.yaw); M4.scale(m, r.s, r.s * 0.8, r.s); L.add('rock' + r.v, m, [1, 1, 1, 0], [0.85, 0.1, 0, 0]); }
-  for (const t of P.tufts) { const m = at(t.x, t.y - 0.03, t.z); M4.rotY(m, t.yaw); M4.scale(m, t.s); L.add('tuft', m, [1, 1, 1, 0], [0.9, 0, 0.12, 0]); }
+  for (const t of P.tufts) { const m = at(t.x, t.y - 0.03, t.z); M4.rotY(m, t.yaw); M4.scale(m, t.s, t.s * (0.8 + 0.5 * hash2(Math.floor(t.x * 7), Math.floor(t.z * 7))), t.s); const k = 0.82 + 0.3 * hash2(Math.floor(t.x * 3), Math.floor(t.z * 3)); L.add('tuft', m, [k, k * (0.95 + 0.1 * hash2(Math.floor(t.z), 5)), k * 0.9, 0], [0.9, 0, 0.12, 0]); }
   for (const f of P.flowers) { const m = at(f.x, f.y - 0.02, f.z); M4.rotY(m, f.yaw); M4.scale(m, f.s); L.add('flower', m, [...f.c, 0.05], [0.8, 0, 0.1, 0]); }
   for (const p of WORLD.pillars) { const m = at(p.x, SHRINE[1] + 0.75, p.z); M4.rotY(m, p.a); L.add('pillar', m, [1, 1, 1, 0], [0.8, 0.1, 0, 0]); }
   L.add('shrineBase', at(SHRINE[0], SHRINE[1], SHRINE[2]), [1, 1, 1, 0], [0.85, 0, 0, 0]);
@@ -2919,7 +2925,7 @@ function addHero(L, t) {
     const m = at(lk.b[0], lk.b[1], lk.b[2]);
     M4.rotX(m, rig.hair[0] * lk.sway * (lk.tail ? 1.6 : 1)); M4.rotZ(m, rig.hair[1] * lk.sway);
     const z = V.mul(lk.out, -1), zz = V.norm(V.sub(z, V.mul(lk.d, V.dot(z, lk.d)))), x = V.cross(lk.d, zz);
-    L.add('lock', hm(M4.mul(m, axesM([0, 0, 0], x, lk.d, zz, lk.w, lk.len, lk.w))), [1, 1, 1, 0], [0.4, 0.25, 0, 0]);
+    L.add('lock', hm(M4.mul(m, axesM([0, 0, 0], x, lk.d, zz, lk.w, lk.len, lk.len))), [1, 1, 1, 0], [0.4, 0.25, 0, 0]);
   }
   // gear on the back
   const backM = M4.mul(rig.chestM, basisY([-0.12, 1.43, -0.17], V.norm([0.5, -0.86, -0.08])));
