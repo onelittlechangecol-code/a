@@ -979,6 +979,11 @@ function buildHero() {
     c = V.lerp(c, [0.3, 0.12, 0.1], G(X, Y + 0.003 * (X / 0.03) ** 2, 0, -0.0732, 0.032, 0.0008) * 0.85 * front);
     c = V.lerp(c, [0.45, 0.24, 0.2], G(ax, Y, 0.031, -0.0745, 0.0035, 0.002) * 0.3 * front);
     c = V.lerp(c, [0.3, 0.14, 0.12], G(ax, Y, 0.0085, -0.0515, 0.0032, 0.0018) * smooth(0, -0.4, n0[1] - 0.2) * 0.9);
+    // cavity occlusion from the sculpt: sockets, alar creases, mouth corners and the groove under the lip sit in shade
+    const cav = FACE.disp(X, Y, front), ao = clamp(1 + cav * 40, 0.66, 1.04)
+      * (1 - front * (0.13 * G(ax, Y, 0.013, -0.022, 0.0065, 0.02) + 0.13 * G(ax, Y, 0.038, 0.017, 0.022, 0.006) + 0.09 * G(ax, Y, 0.056, -0.046, 0.02, 0.012) + 0.1 * G(ax, Y, 0.021, 0.004, 0.006, 0.008)));
+    const under = 1 - 0.16 * G(X, Y, 0, -0.054, 0.013, 0.0035) * front - 0.12 * G(ax, Y, 0.017, -0.052, 0.005, 0.004) * front - 0.1 * G(X, Y, 0, -0.086, 0.014, 0.003) * front;
+    c = V.mul(c, ao * under);
     return c.concat([1]);
   }, 110, 90, (q, n0) => {
     if (n0[1] < 0) { const k = -n0[1]; q[0] *= 1 - 0.17 * Math.pow(k, 1.4); q[2] += 0.005 * k * k * Math.max(0, n0[2]); }
@@ -3572,7 +3577,7 @@ function addHero(L, t) {
   const p = player, H = rig.headM, st = rig.state;
   const hm = (local) => M4.mul(H, local);
   const bl = rig.blink > 0 ? 0.1 : 1, hurtEyes = st === 'hurt' ? 0.35 : 1, fierce = st === 'attack' || st === 'charge' || st === 'pound';
-  const lx = clamp(p.lookYaw * 0.4, -0.3, 0.3), ly = clamp(-p.lookPitch * 0.4, -0.25, 0.25);
+  const lx = clamp(p.lookYaw * 0.25, -0.22, 0.22), ly = clamp(-p.lookPitch * 0.3, -0.18, 0.18);
   for (const s of [1, -1]) {
     // eyeball: a real-sized sphere; the iris disc and pupil turn with the gaze, lids hinge on its centre
     const E = [s * 0.041, 1.5415, 0.1015], ER = 0.0162;
