@@ -1119,6 +1119,12 @@ function buildHeroProps(M) {
   M.skinBlob = ellipsoid([0, 0, 0], [1, 1, 1], HC.skin, 14, 10);
   M.lipBlob = ellipsoid([0, 0, 0], [1, 1, 1], HC.lip, 12, 8);
   M.browBlob = ellipsoid([0, 0, 0], [1, 1, 1], HC.brow, 10, 6);
+  // eyelids: skin-coloured half shells that slide over the eye
+  M.lidUp = keepTris(ellipsoid([0, 0, 0], [1, 1, 1], HC.skin, 20, 14), p => p[1] > -0.02);
+  M.lidLo = keepTris(ellipsoid([0, 0, 0], [1, 1, 1], HC.skin, 20, 14), p => p[1] < 0.02);
+  // closed-mouth smile: a thin arc curving up at the corners
+  { const pts = []; for (let k = 0; k <= 8; k++) { const x = -1 + k / 4; pts.push([x, 0.35 * x * x, 0]); }
+    const sm = new Mesh(); for (let k = 0; k < 8; k++) sm.merge(tubeMesh(pts[k], pts[k + 1], () => 0.16, () => HC.lip, 6, 1)); M.smile = sm; }
   M.ear = (() => { const e = cylMesh(12, 1, 0.04, 1, HC.skin, true); e.c = e.c.map((v, i) => i % 4 === 3 ? 1 : v); return e; })();
   // sword: grip, guard, blade (diamond section), pommel
   {
@@ -2392,6 +2398,11 @@ struct TOut { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1
   n = normalize(abs(det) * n - sign(det) * (dhx * r1 + dhy * r2));
   var base = v.col * (0.84 + 0.28 * d1) * (0.94 + 0.12 * d2) * (0.9 + 0.2 * mix(grassMicro, strata, rockW));
   base *= 1.0 - smoothstep(0.35, -0.15, v.wp.y) * 0.35;
+  // caustics dancing on the shallow sea floor
+  let ct = F.camPos.w;
+  let cp = v.wp.xz * 1.3;
+  let cau = abs(sin(cp.x + sin(cp.y * 1.3 + ct * 1.1) * 1.4 + ct * 0.6) * sin(cp.y + sin(cp.x * 1.1 - ct * 0.9) * 1.4 - ct * 0.5));
+  base += vec3f(0.55, 0.75, 0.7) * pow(1.0 - cau, 6.0) * smoothstep(0.05, -0.4, v.wp.y) * smoothstep(-3.5, -1.0, v.wp.y) * 0.5;
   let sh = shadowAt(v.wp, n);
   var c = lighting(base, n, v.wp, 0.93, 0.0, sh, 0.0, vec3f(0.0, 1.0, 0.0));
   return vec4f(applyFog(c, v.wp), 1.0);
@@ -2957,11 +2968,15 @@ function addHero(L, t) {
   const lx = clamp(p.lookYaw * 0.4, -0.3, 0.3), ly = clamp(-p.lookPitch * 0.4, -0.25, 0.25);
   for (const s of [1, -1]) {
     const e = at(s * 0.044, 1.546, 0.1265); M4.rotY(e, s * 0.32);
-    const w = e.slice(); M4.scale(w, 0.027, 0.033 * bl * hurtEyes, 0.0095);
-    const lash = e.slice(); M4.translate(lash, 0, 0.034 * (bl < 1 ? 0.1 : 1) * hurtEyes, 0.004); M4.rotZ(lash, -s * 0.12); M4.scale(lash, 0.031, 0.0045, 0.009); L.add('browBlob', hm(lash), [0.5, 0.4, 0.4, 0], [0.4, 0, 0, 0]); L.add('eyeW', hm(w), [1, 1, 1, 0.05], [0.1, 0.1, 0, 0]);
-    const ir = e.slice(); M4.translate(ir, lx * 0.012, ly * 0.012 - 0.002, 0.0072); M4.scale(ir, 0.0165, 0.02 * bl * hurtEyes, 0.0055); L.add('iris', hm(ir), [1, 1, 1, 0.12], [0.1, 0, 0, 0]);
-    const pu = e.slice(); M4.translate(pu, lx * 0.013, ly * 0.013 - 0.002, 0.0112); M4.scale(pu, 0.009, 0.011 * bl * hurtEyes, 0.004); L.add('pupil', hm(pu), [1, 1, 1, 0], [0.1, 0, 0, 0]);
-    const gl = e.slice(); M4.translate(gl, lx * 0.012 + 0.006, ly * 0.012 + 0.007, 0.0142); M4.scale(gl, 0.0036 * bl); L.add('eyeW', hm(gl), [1, 1, 1, 2.2], [0.1, 0, 0, 0]);
+    const w = e.slice(); M4.scale(w, 0.027, 0.033, 0.0095); L.add('eyeW', hm(w), [1, 1, 1, 0.05], [0.1, 0.1, 0, 0]);
+    // lids: resting slightly lowered, fully closed on a blink, squinting when hurt or fierce
+    const closeU = bl < 1 ? 1.08 : (hurtEyes < 1 ? 0.8 : (fierce ? 0.5 : 0.28)), closeL = bl < 1 ? 0.25 : (hurtEyes < 1 ? 0.45 : 0.12);
+    const lu = e.slice(); M4.translate(lu, 0, 0, 0.0012); M4.scale(lu, 0.0292, 0.035 * closeU, 0.0108); L.add('lidUp', hm(lu), [1, 1, 1, 0], [0.5, 0.2, 0, 0]);
+    const lo = e.slice(); M4.translate(lo, 0, 0, 0.0008); M4.scale(lo, 0.0288, 0.034 * closeL, 0.0104); L.add('lidLo', hm(lo), [1, 1, 1, 0], [0.5, 0.2, 0, 0]);
+    const lash = e.slice(); M4.translate(lash, 0, 0.034 - 0.068 * Math.max(0, closeU - 0.28) / 0.8, 0.005); M4.rotZ(lash, -s * 0.12); M4.scale(lash, 0.031, 0.0045, 0.009); L.add('browBlob', hm(lash), [0.5, 0.4, 0.4, 0], [0.4, 0, 0, 0]);
+    const ir = e.slice(); M4.translate(ir, lx * 0.012, ly * 0.012 - 0.002, 0.0072); M4.scale(ir, 0.0165, 0.02, 0.0055); L.add('iris', hm(ir), [1, 1, 1, 0.12], [0.1, 0, 0, 0]);
+    const pu = e.slice(); M4.translate(pu, lx * 0.013, ly * 0.013 - 0.002, 0.0112); M4.scale(pu, 0.009, 0.011, 0.004); L.add('pupil', hm(pu), [1, 1, 1, 0], [0.1, 0, 0, 0]);
+    const gl = e.slice(); M4.translate(gl, lx * 0.012 + 0.006, ly * 0.012 + 0.007, 0.0142); M4.scale(gl, 0.0036 * (bl < 1 ? 0 : 1)); L.add('eyeW', hm(gl), [1, 1, 1, 2.2], [0.1, 0, 0, 0]);
     const br = at(s * 0.047, 1.588 - (fierce ? 0.004 : 0), 0.121); M4.rotY(br, s * 0.3); M4.rotZ(br, -s * (fierce ? 0.32 : 0.1)); M4.scale(br, 0.026, 0.0058, 0.008);
     L.add('browBlob', hm(br), [1, 1, 1, 0], [0.5, 0, 0, 0]);
     // pointed ear
@@ -2969,7 +2984,8 @@ function addHero(L, t) {
     L.add('ear', hm(axesM(eb, ex, ed, ez, 0.03, 0.1, 0.012)), [1, 1, 1, 0], [0.5, 0.3, 0, 0]);
   }
   const no = at(0, 1.527, 0.133); M4.rotX(no, -0.35); M4.scale(no, 0.012, 0.018, 0.013); L.add('skinBlob', hm(no), [1, 1, 1, 0], [0.5, 0.2, 0, 0]);
-  const mo = at(0, 1.483, 0.12); M4.scale(mo, 0.017 - rig.mouth * 0.004, 0.0032 + rig.mouth * 0.009, 0.006); L.add('lipBlob', hm(mo), [1, 1, 1, 0], [0.4, 0, 0, 0]);
+  if (rig.mouth > 0.32) { const mo = at(0, 1.482, 0.12); M4.scale(mo, 0.016 - rig.mouth * 0.003, 0.002 + (rig.mouth - 0.3) * 0.012, 0.006); L.add('lipBlob', hm(mo), [1, 1, 1, 0], [0.4, 0, 0, 0]); }
+  else { const sm = at(0, 1.483, 0.1305); M4.rotX(sm, -0.3); M4.scale(sm, 0.018, fierce ? 0.004 : 0.01, 0.014); L.add('smile', hm(sm), [1, 1, 1, 0], [0.4, 0, 0, 0]); }
   // hair locks with spring sway
   for (const lk of LOCKS) {
     const m = at(lk.b[0], lk.b[1], lk.b[2]);
