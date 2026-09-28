@@ -977,7 +977,7 @@ function buildHero() {
     c = V.lerp(c, HC.lip, smooth(0.35, 0.8, lip) * 0.45 * front);
     c = V.lerp(c, V.mul(HC.lip, 0.8), G(X, Y, 0, -0.068, 0.027, 0.0035) * 0.35 * front);
     c = V.lerp(c, [0.3, 0.12, 0.1], G(X, Y + 0.003 * (X / 0.03) ** 2, 0, -0.0732, 0.032, 0.0008) * 0.85 * front);
-    c = V.lerp(c, [0.36, 0.17, 0.14], G(ax, Y, 0.031, -0.0745, 0.003, 0.002) * 0.7 * front);
+    c = V.lerp(c, [0.45, 0.24, 0.2], G(ax, Y, 0.031, -0.0745, 0.0035, 0.002) * 0.3 * front);
     c = V.lerp(c, [0.3, 0.14, 0.12], G(ax, Y, 0.0085, -0.0515, 0.0032, 0.0018) * smooth(0, -0.4, n0[1] - 0.2) * 0.9);
     return c.concat([1]);
   }, 110, 90, (q, n0) => {
@@ -1403,9 +1403,23 @@ function buildHeroProps(M) {
     m.recomputeNormals();
     return m;
   })();
-  // arched eyebrow
-  { const pts = []; for (let k = 0; k <= 6; k++) { const x = -1 + k / 3; pts.push([x, -0.3 * x * x + 0.15 * x, 0]); }
-    const br = new Mesh(); for (let k = 0; k < 6; k++) br.merge(tubeMesh(pts[k], pts[k + 1], (t) => 0.2 - Math.abs(k + t - 2.2) * 0.03, () => HC.brow, 6, 1)); M.browArc = br; }
+  // eyebrow: individual tapered hair strokes along an arch; the inner ones rise, the outer ones lie flat toward the temple
+  {
+    const br = new Mesh(); let sd = 11; const rnd = () => { sd = (sd * 16807) % 2147483647; return sd / 2147483647; };
+    for (let k = 0; k < 72; k++) {
+      const x = -1 + (k / 71) * 2 + (rnd() - 0.5) * 0.04, y0 = -0.3 * x * x + 0.15 * x + (rnd() - 0.5) * 0.35 * (1 - Math.abs(x) * 0.5);
+      const ang = lerp(1.15, 0.12, (x + 1) / 2) + (rnd() - 0.5) * 0.3, len = lerp(0.2, 0.34, 1 - Math.abs(x + 0.2) * 0.6) * (0.8 + rnd() * 0.4);
+      const dx = Math.cos(ang), dy = Math.sin(ang), w = 0.055, base = br.vcount;
+      const col = V.mul(V.lerp(HC.brow, HC.hairDark, rnd() * 0.4), 0.55).concat([3]);
+      for (let u = 0; u <= 3; u++) {
+        const t = u / 3, px = x + dx * len * t, py = y0 + dy * len * t - 0.04 * t * t, ww = w * (1 - t * 0.9);
+        br.v([px - dy * ww, py + dx * ww, 0.3 * t * (1 - t)], [0, 0, 1], col);
+        br.v([px + dy * ww, py - dx * ww, 0.3 * t * (1 - t)], [0, 0, 1], col);
+      }
+      for (let u = 0; u < 3; u++) { const a = base + u * 2; br.tri(a, a + 1, a + 2); br.tri(a + 1, a + 3, a + 2); }
+    }
+    M.browArc = br;
+  }
   // sword: wrapped grip, winged guard with a gem, fullered blade with a leaf taper, faceted pommel
   {
     const s = new Mesh(), blue = mc('#3fd2ff', 6);
@@ -2785,7 +2799,7 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
   if (sss > 0.0) {
     // light bleeding past the terminator and through thin edges, warm tinted
     let bleed = clamp((nl + 0.6) / 1.6, 0.0, 1.0) - clamp(nl, 0.0, 1.0);
-    c += base * vec3f(1.0, 0.42, 0.3) * bleed * sss * 0.7 * F.sunCol.rgb * max(sh, 0.45);
+    c += base * vec3f(1.0, 0.36, 0.24) * bleed * sss * 0.85 * F.sunCol.rgb * max(sh, 0.45);
     let back = pow(clamp(dot(v, -l), 0.0, 1.0), 4.0) * pow(1.0 - nv, 2.0);
     c += base * vec3f(1.0, 0.5, 0.32) * back * sss * 0.6 * F.sunCol.rgb;
   }
@@ -2805,6 +2819,11 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
   let rd = reflect(-v, n);
   let ground = vec3f(0.2, 0.24, 0.11) * (F.sunCol.rgb * 0.55 * F.sunDir.w + vec3f(0.35, 0.38, 0.42));
   let env = mix(skyColor(rd), ground, smoothstep(0.03, -0.1, rd.y)) * mix(0.5, 1.0, sh);
+  if (m == 1) {
+    // skin: a tight wet sheen over the broad lobe, and soft peach-fuzz scattering at grazing angles
+    c += F.sunCol.rgb * ggx(n, v, l, 0.26) * sh * F.sunDir.w * 0.035;
+    c += base * pow(1.0 - nv, 3.0) * 0.16 * (F.skyHor.rgb * 0.6 + F.sunCol.rgb * 0.25 * sh);
+  }
   // mail rings shadow each other, so they only catch a fraction of the sky
   c += env * fres * mix(0.3 * (1.0 - rough), 0.85, metal) * select(1.0, 0.3, m == 16);
   c += sheen * pow(1.0 - nv, 4.0) * base * (F.skyHor.rgb * 0.9 + F.sunCol.rgb * 0.3);
@@ -3515,7 +3534,7 @@ function addHero(L, t) {
     const aU = bl < 1 ? -0.3 : (hurtEyes < 1 ? 0.08 : (fierce ? 0.26 : 0.5)), aL = bl < 1 ? 0.2 : (hurtEyes < 1 ? 0.16 : (fierce ? 0.26 : 0.4));
     const lu = at(E[0], E[1], E[2]); M4.rotX(lu, -aU); M4.scale(lu, ER * 1.07 * s, ER * 1.07, ER * 1.07); L.add('lidUp', hm(lu), [0.9, 0.84, 0.82, 0], [0.5, 0.2, 0, 0]);
     const lo = at(E[0], E[1], E[2]); M4.rotX(lo, aL); M4.scale(lo, ER * 1.05, -ER * 1.05, ER * 1.05); L.add('lidLo', hm(lo), [0.92, 0.86, 0.84, 0], [0.5, 0.2, 0, 0]);
-    const br = at(s * 0.04, 1.5625 - (fierce ? 0.004 : 0), 0.1262); M4.rotY(br, s * 0.36); M4.rotZ(br, -s * (fierce ? 0.28 : -0.04)); M4.scale(br, -s * 0.026, 0.012, 0.005);
+    const br = at(s * 0.04, 1.5625 - (fierce ? 0.004 : 0), 0.1262); M4.rotY(br, s * 0.36); M4.rotZ(br, -s * (fierce ? 0.28 : -0.04)); M4.scale(br, -s * 0.026, 0.02, 0.006);
     L.add('browArc', hm(br), [1, 1, 1, 0], [0.5, 0, 0, 0]);
     // pointed ear
     const eb = [s * 0.102, 1.524, 0.004], ed = V.norm([s * 0.85, 0.42, -0.36]), ez = V.norm(V.sub([0, 0, 1], V.mul(ed, ed[2]))), ex = V.cross(ed, ez);
