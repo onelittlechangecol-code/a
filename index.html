@@ -1136,8 +1136,14 @@ function buildHero() {
   P(ellipsoid([-0.172, 0.93, 0.1], [0.009, 0.008, 0.005], HC.gold, 8, 6), [BI.pelvis]);
   // ---- arms + hands ----
   for (const s of [1, -1]) {
-    P(ellipsoid(sd([0.162, 1.312, -0.008], s), [0.066, 0.064, 0.066], HC.tunic, 18, 12), [BI.ua(s), BI.chest]);
     const sh = sd(HB.sh, s), el = sd(HB.el, s), wr = sd(HB.wr, s), ha = sd(HB.ha, s);
+    // short tunic sleeve: a deltoid-shaped cap flowing into a flared sleeve with soft folds and a gold-trimmed hem
+    P(ellipsoid(sd([0.15, 1.322, -0.008], s), [0.058, 0.046, 0.06], HC.tunic, 20, 12, (q) => { if (q[1] < 0) q[1] *= 0.6; return q; }), [BI.ua(s), BI.chest]);
+    {
+      const A = sd([0.158, 1.345, -0.009], s), B = V.lerp(sh, el, 0.36);
+      P(wrinkle(tubeMesh(A, B, t => lerp(0.06, 0.058, t) + 0.006 * smooth(0.6, 1, t), (t) => t > 0.86 ? (t > 0.95 ? V.mul(HC.trim, 0.8).concat([5]) : HC.trim) : V.lerp(HC.tunicDark, HC.tunic, smooth(0, 0.5, t)).concat([2]), 36, 16, [true, false]), A, B,
+        (t, an) => 0.0028 * Math.sin(an * 6 + t * 3) * smooth(0.2, 0.8, t)), [BI.ua(s), BI.chest]);
+    }
     // linen sleeve: soft vertical pleats from the shoulder seam, compression folds bunching at the elbow, gathered cuff
     P(wrinkle(tubeMesh(sh, el, t => lerp(0.053, 0.044, t) + Math.sin(t * Math.PI) * 0.005, (t) => t > 0.9 ? HC.trim : HC.shirt, 40, 36), sh, el,
       (t, an) => 0.009 * Math.sin(an * 7 + Math.sin(t * 7) * 1.4) * smooth(0.05, 0.3, t) * (1 - smooth(0.7, 0.9, t))
