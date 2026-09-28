@@ -110,6 +110,7 @@ button:focus-visible,.chip:focus-visible{outline:3px solid var(--sun);outline-of
     <span class="timer" id="timer">0:00</span>
     <button class="chip" id="skelBtn" aria-pressed="false" title="Ver esqueleto (B)">Esqueleto</button>
     <button class="chip opt" id="muteBtn" aria-pressed="false" title="Silenciar (M)">Silencio</button>
+    <button class="chip opt" id="qualBtn" title="Calidad gráfica">Calidad: Alta</button>
     <button class="chip" id="pauseBtn" title="Pausa (P)">Pausa</button>
   </div>
 </div>
@@ -2753,6 +2754,11 @@ struct Post { sun: vec4f };
 `;
 
 const GR = {}; // renderer state
+const QUALITY = {
+  alta: { label: 'Alta', dpr: 2, maxPix: 2560 * 1440, refl: true, fine: true, grass: true },
+  media: { label: 'Media', dpr: 1.25, maxPix: 1920 * 1080, refl: true, fine: true, grass: true },
+  baja: { label: 'Baja', dpr: 1, maxPix: 1280 * 720, refl: false, fine: false, grass: false },
+};
 const FRAME_FLOATS = 104;
 const INST_FLOATS = 24;
 
@@ -2913,9 +2919,10 @@ async function initRenderer(meshes) {
 
 function resizeTargets() {
   const d = GR.device;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const Q = QUALITY[state.quality] || QUALITY.alta;
+  const dpr = Math.min(window.devicePixelRatio || 1, Q.dpr);
   let w = Math.max(2, Math.floor(canvas.clientWidth * dpr)), h = Math.max(2, Math.floor(canvas.clientHeight * dpr));
-  const maxPix = 2560 * 1440, pix = w * h;
+  const maxPix = Q.maxPix, pix = w * h;
   if (pix > maxPix) { const s = Math.sqrt(maxPix / pix); w = Math.floor(w * s); h = Math.floor(h * s); }
   if (GR.w === w && GR.h === h) return;
   GR.w = w; GR.h = h; canvas.width = w; canvas.height = h;
@@ -3013,7 +3020,8 @@ function frameUniforms() {
   f.set([view[1], view[5], view[9], 0], 84);
   const c2 = M4.apply(lv, V.add(player.pos, [0, 1.0, 0])), ext2 = 3.4, unit2 = ext2 * 2 / 1024;
   c2[0] = Math.round(c2[0] / unit2) * unit2; c2[1] = Math.round(c2[1] / unit2) * unit2;
-  f.set(M4.mul(M4.ortho(c2[0] - ext2, c2[0] + ext2, c2[1] - ext2, c2[1] + ext2, -c2[2] - 40, -c2[2] + 40), lv), 88);
+  if (QUALITY[state.quality].fine) f.set(M4.mul(M4.ortho(c2[0] - ext2, c2[0] + ext2, c2[1] - ext2, c2[1] + ext2, -c2[2] - 40, -c2[2] + 40), lv), 88);
+  else { const off = new Float32Array(16); off[12] = 10; off[15] = 1; f.set(off, 88); }  // fine cascade off: every lookup lands outside it
   GR.device.queue.writeBuffer(GR.frameUB, 0, f);
   // mirrored camera for the water reflection (reflect across the water plane, clip below it)
   const mirror = M4.id(); mirror[5] = -1; mirror[13] = 2 * WORLD.water;
@@ -3275,7 +3283,8 @@ function render() {
     pass.end();
   }
   // --- fine cascade around the hero ---
-  {
+  const Q = QUALITY[state.quality];
+  if (Q.fine) {
     const pass = enc.beginRenderPass({ colorAttachments: [], depthStencilAttachment: { view: GR.shadowView2, depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'store' } });
     pass.setBindGroup(0, GR.shadowBG);
     pass.setPipeline(GR.psTerrain2); pass.setVertexBuffer(0, GR.terrVB); pass.setIndexBuffer(GR.terrIB, 'uint32'); pass.drawIndexed(GR.terrCount);
@@ -3296,6 +3305,7 @@ function render() {
       depthStencilAttachment: { view: GR.reflDepth.createView(), depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'discard' },
     });
     pass.setBindGroup(0, GR.sceneBGR);
+    if (Q.refl) {
     pass.setPipeline(GR.pSkyR); pass.draw(3);
     pass.setPipeline(GR.pTerrainR); pass.setVertexBuffer(0, GR.terrVB); pass.setIndexBuffer(GR.terrIB, 'uint32'); pass.drawIndexed(GR.terrCount);
     pass.setPipeline(GR.pMeshR); pass.setVertexBuffer(0, GR.meshVB); pass.setIndexBuffer(GR.meshIB, 'uint32');
@@ -3305,6 +3315,7 @@ function render() {
       pass.setPipeline(GR.pHeroR);
       pass.setVertexBuffer(0, GR.heroVB); pass.setIndexBuffer(GR.heroIB, 'uint32'); pass.drawIndexed(GR.heroCount);
       pass.setVertexBuffer(0, GR.capeVB); pass.setIndexBuffer(GR.capeIB, 'uint32'); pass.drawIndexed(GR.capeCount);
+    }
     }
     pass.end();
   }
@@ -3318,7 +3329,7 @@ function render() {
     pass.setPipeline(GR.pSky); pass.draw(3);
     pass.setPipeline(GR.pTerrain); pass.setVertexBuffer(0, GR.terrVB); pass.setIndexBuffer(GR.terrIB, 'uint32'); pass.drawIndexed(GR.terrCount);
     pass.setPipeline(GR.pMesh); pass.setVertexBuffer(0, GR.meshVB); pass.setIndexBuffer(GR.meshIB, 'uint32');
-    drawGroups(pass, GR.staticGroups, GR.staticIB);
+    drawGroups(pass, Q.grass ? GR.staticGroups : GR.staticGroups.filter(g => !GR.shadowSkip.has(g.mesh)), GR.staticIB);
     drawGroups(pass, GR.dynGroups, GR.dynIB);
     if (heroVisible) {
       pass.setPipeline(GR.pHero);
@@ -3343,7 +3354,7 @@ function render() {
 // ============================================================
 //  Game flow + main loop
 // ============================================================
-const state = { mode: 'title', time: 0, playTime: 0, required: 0, shrineAwake: false, won: false, hitstop: 0, debug: false };
+const state = { quality: (() => { try { return localStorage.getItem('brio-quality') || (isTouch ? 'media' : 'alta'); } catch (_) { return isTouch ? 'media' : 'alta'; } })(), mode: 'title', time: 0, playTime: 0, required: 0, shrineAwake: false, won: false, hitstop: 0, debug: false };
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let HERO = null, MESHES = null;
 function hitstop(t) { state.hitstop = Math.max(state.hitstop, t); }
@@ -3407,6 +3418,7 @@ function frame(now) {
     toastStep(dt);
   }
   cameraUpdate(dt, state.mode === 'play' ? inp.cam : [0, 0]);
+  if (!window.__skipRender) perfStep(dt);
   if (!window.__skipRender) { try { render(); } catch (e) { console.error(e); } }
   requestAnimationFrame(frame);
 }
@@ -3457,6 +3469,24 @@ function restartGame() {
   cam.yaw = Math.PI * 0 + player.yaw + Math.PI;
   last = performance.now();
 }
+function setQuality(q, auto = false) {
+  state.quality = q; GR.w = 0;
+  try { localStorage.setItem('brio-quality', q); } catch (_) { }
+  const b = document.getElementById('qualBtn'); if (b) b.textContent = 'Calidad: ' + QUALITY[q].label;
+  if (auto) toast('Calidad ajustada a ' + QUALITY[q].label + ' para mantener la fluidez.', 4);
+}
+function cycleQuality() { const order = ['alta', 'media', 'baja']; setQuality(order[(order.indexOf(state.quality) + 1) % 3]); }
+const perf = { t: 0, n: 0, slow: 0 };
+function perfStep(dt) {
+  if (state.mode !== 'play') return;
+  perf.t += dt; perf.n++;
+  if (perf.t >= 2) {
+    const avg = perf.t / perf.n;
+    perf.slow = avg > 1 / 32 ? perf.slow + 1 : 0;
+    if (perf.slow >= 2 && state.quality !== 'baja' && !state.qualityManual) { setQuality(state.quality === 'alta' ? 'media' : 'baja', true); perf.slow = 0; }
+    perf.t = 0; perf.n = 0;
+  }
+}
 function toggleSkeleton() {
   state.debug = !state.debug;
   document.getElementById('skelBtn').setAttribute('aria-pressed', state.debug ? 'true' : 'false');
@@ -3492,6 +3522,8 @@ async function boot() {
   document.getElementById('pauseBtn').addEventListener('click', pauseGame);
   document.getElementById('skelBtn').addEventListener('click', () => { toggleSkeleton(); canvas.focus(); });
   document.getElementById('muteBtn').addEventListener('click', () => { toggleMute(); canvas.focus(); });
+  document.getElementById('qualBtn').addEventListener('click', () => { state.qualityManual = true; cycleQuality(); canvas.focus(); });
+  setQuality(state.quality);
   document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
     document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', x === b ? 'true' : 'false'));
     show('ctlKb', b.dataset.tab === 'kb'); show('ctlPad', b.dataset.tab === 'pad'); show('ctlTouch', b.dataset.tab === 'touch');
