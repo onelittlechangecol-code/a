@@ -1668,6 +1668,7 @@ function buildLife(M) {
 }
 
 // hair locks laid out in bind space: base point, direction, length, width
+const HEAD_SCALE = 0.89;
 const LOCKS = (() => {
   const L = [], hc = HB.headC;
   let sd0 = 3; const r = () => { sd0 = (sd0 * 16807) % 2147483647; return sd0 / 2147483647; };
@@ -2114,6 +2115,8 @@ function updateRig(dt, time) {
   rig.F = F;
   // skin matrices (bind space -> world)
   rig.skin = F.map((f, b) => { const M = R3.mul(f.R, R3.T(BONES[b].Rb)); return { M, t: V.sub(f.P, R3.v(M, BONES[b].Pb)) }; });
+  // heroic proportions: the head is scaled about the top of the neck (about 7.3 heads tall instead of 6.4)
+  { const s = HEAD_SCALE, h = rig.skin[4], P = [0, 1.43, 0.005]; h.t = V.add(h.t, V.mul(R3.v(h.M, P), 1 - s)); h.M = h.M.map(v => v * s); }
   rig.headM = m4RT(rig.skin[4].M, rig.skin[4].t);
   rig.chestM = m4RT(rig.skin[2].M, rig.skin[2].t);
   // sword placement
