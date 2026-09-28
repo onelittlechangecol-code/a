@@ -1246,27 +1246,58 @@ function buildHeroProps(M) {
   // arched eyebrow
   { const pts = []; for (let k = 0; k <= 6; k++) { const x = -1 + k / 3; pts.push([x, -0.3 * x * x + 0.15 * x, 0]); }
     const br = new Mesh(); for (let k = 0; k < 6; k++) br.merge(tubeMesh(pts[k], pts[k + 1], (t) => 0.2 - Math.abs(k + t - 2.2) * 0.03, () => HC.brow, 6, 1)); M.browArc = br; }
-  // sword: grip, guard, blade (diamond section), pommel
+  // sword: wrapped grip, winged guard with a gem, fullered blade with a leaf taper, faceted pommel
   {
-    const s = new Mesh();
-    s.merge(tubeMesh([0, 0, 0], [0, 0.13, 0], () => 0.015, (t) => (Math.floor(t * 9) % 2 ? HC.leather : HC.leatherDark), 10, 9));
-    s.merge(ellipsoid([0, -0.018, 0], [0.022, 0.022, 0.022], HC.gold, 12, 8));
-    s.merge(ellipsoid([0, 0.142, 0], [0.085, 0.016, 0.024], HC.gold, 16, 8, (q) => { q[1] += Math.abs(q[0]) * 0.25; return q; }));
-    const ring = (y, w, th) => [[w, y, 0], [0, y, th], [-w, y, 0], [0, y, -th]];
-    const prof = [[0.15, 0.028, 0.007], [0.5, 0.025, 0.006], [0.82, 0.021, 0.005], [0.93, 0, 0]];
-    for (let k = 0; k < prof.length - 1; k++) {
-      const A = ring(...prof[k]), B = ring(...prof[k + 1]);
-      for (let f = 0; f < 4; f++) {
-        const a0 = A[f], a1 = A[(f + 1) % 4], b0 = B[f], b1 = B[(f + 1) % 4];
-        const n = V.norm(V.cross(V.sub(a1, a0), V.sub(b0, a0)));
-        const i0 = s.v(a0, n, HC.steel), i1 = s.v(a1, n, HC.steel), i2 = s.v(b0, n, HC.steel), i3 = s.v(b1, n, HC.steel);
+    const s = new Mesh(), blue = mc('#3fd2ff', 6);
+    s.merge(tubeMesh([0, 0, 0], [0, 0.13, 0], (t) => 0.0135 + 0.0015 * Math.sin(t * Math.PI), () => HC.leatherDark, 10, 6));
+    // spiral cord wrap around the grip
+    for (let k = 0; k < 36; k++) {
+      const a0 = k * 0.55, a1 = (k + 1) * 0.55, y0 = 0.006 + k * 0.0034, y1 = y0 + 0.0034;
+      s.merge(tubeMesh([Math.cos(a0) * 0.0155, y0, Math.sin(a0) * 0.0155], [Math.cos(a1) * 0.0155, y1, Math.sin(a1) * 0.0155], () => 0.0026, () => HC.leather, 5, 1, [false, false]));
+    }
+    s.merge(transformed(torusMesh(0.016, 0.004, 14, 6, HC.gold), at(0, 0.004, 0)));
+    s.merge(transformed(torusMesh(0.017, 0.004, 14, 6, HC.gold), at(0, 0.128, 0)));
+    // pommel: gold cage around a gem
+    s.merge(ellipsoid([0, -0.02, 0], [0.024, 0.02, 0.024], HC.gold, 12, 8, (q) => { q[1] *= 1 + 0.1 * Math.cos(Math.atan2(q[0], q[2]) * 8); return q; }));
+    s.merge(ellipsoid([0, -0.02, 0.019], [0.009, 0.009, 0.007], blue, 10, 6));
+    s.merge(ellipsoid([0, -0.02, -0.019], [0.009, 0.009, 0.007], blue, 10, 6));
+    // winged crossguard sweeping up toward the blade, with a centre block and gem
+    for (const sx of [1, -1]) {
+      const pts = []; for (let k = 0; k <= 6; k++) { const t = k / 6; pts.push([sx * (0.018 + t * 0.075), 0.142 + t * t * 0.03, 0]); }
+      for (let k = 0; k < 6; k++) s.merge(tubeMesh(pts[k], pts[k + 1], (t) => lerp(0.012, 0.007, (k + t) / 6), () => HC.gold, 8, 1, [k === 0, false]));
+      s.merge(ellipsoid(pts[6], [0.011, 0.011, 0.011], HC.gold, 10, 6));
+      s.merge(ellipsoid(V.add(pts[6], [0, 0, 0.008]), [0.005, 0.005, 0.004], blue, 8, 5));
+    }
+    s.merge(ellipsoid([0, 0.146, 0], [0.026, 0.02, 0.017], HC.gold, 14, 8, (q) => { q[1] -= Math.abs(q[0]) * 0.3; return q; }));
+    s.merge(ellipsoid([0, 0.148, 0.015], [0.009, 0.012, 0.005], blue, 10, 6));
+    s.merge(ellipsoid([0, 0.148, -0.015], [0.009, 0.012, 0.005], blue, 10, 6));
+    // blade: hexagonal section with a sunken fuller, gently leaf-shaped, bevelled point
+    const sec = (w, th, fu) => [[w, 0], [w * 0.55, th], [w * 0.22, th], [0, th * fu], [-w * 0.22, th], [-w * 0.55, th], [-w, 0], [-w * 0.55, -th], [-w * 0.22, -th], [0, -th * fu], [w * 0.22, -th], [w * 0.55, -th]];
+    const stations = [[0.155, 0.026, 0.0075, 0.35], [0.3, 0.028, 0.007, 0.35], [0.5, 0.0275, 0.0065, 0.4], [0.7, 0.025, 0.006, 0.5], [0.8, 0.022, 0.0055, 0.8], [0.88, 0.014, 0.004, 1], [0.935, 0, 0, 1]];
+    const cols = (f) => f === 3 || f === 9 || f === 2 || f === 4 || f === 8 || f === 10 ? [0.82, 0.86, 0.9, 4] : HC.steel;
+    for (let k = 0; k < stations.length - 1; k++) {
+      const [ya, wa, ta, fa] = stations[k], [yb, wb, tb, fb] = stations[k + 1];
+      const A = sec(wa, ta, fa).map(p => [p[0], ya, p[1]]), Bq = sec(wb, tb, fb).map(p => [p[0], yb, p[1]]);
+      for (let f = 0; f < 12; f++) {
+        const a0 = A[f], a1 = A[(f + 1) % 12], b0 = Bq[f], b1 = Bq[(f + 1) % 12];
+        const n = V.norm(V.cross(V.sub(a1, a0), V.sub(b0, a0))), c = f === 0 || f === 5 || f === 6 || f === 11 ? [0.95, 0.97, 1, 4] : cols(f);
+        const i0 = s.v(a0, n, c), i1 = s.v(a1, n, c), i2 = s.v(b0, n, c), i3 = s.v(b1, n, c);
         s.tri(i0, i1, i2); s.tri(i1, i3, i2);
       }
     }
     M.sword = s;
     M.rune = tubeMesh([0, 0.17, 0], [0, 0.78, 0], () => 0.0035, () => [1, 1, 1, 0], 6, 2);
   }
-  M.scabbard = (() => { const m = tubeMesh([0, 0.13, 0], [0, 0.95, 0], t => lerp(0.034, 0.024, t), (t) => t < 0.07 || t > 0.93 ? HC.gold : HC.leather, 12, 8); for (let k = 0; k < m.vcount; k++) m.p[k * 3 + 2] *= 0.45; return m; })();
+  // scabbard: blue-dyed leather over a flattened core, gold locket, band and pointed chape with filigree rings
+  M.scabbard = (() => {
+    const m = new Mesh(), bl = mc('#23536b', 3);
+    m.merge(tubeMesh([0, 0.13, 0], [0, 0.93, 0], t => lerp(0.034, 0.024, t), (t) => t < 0.1 || (t > 0.44 && t < 0.49) ? HC.gold : (Math.abs(((t * 40) % 1) - 0.5) < 0.04 ? V.mul(bl, 0.7).concat([3]) : bl), 14, 30));
+    m.merge(tubeMesh([0, 0.9, 0], [0, 0.985, 0], t => lerp(0.026, 0.004, t * t), () => HC.gold, 14, 5, [false, true]));
+    for (const y of [0.13, 0.215, 0.49, 0.9]) m.merge(transformed(torusMesh(lerp(0.035, 0.025, (y - 0.13) / 0.8), 0.0045, 20, 6, HC.gold), at(0, y, 0)));
+    m.merge(ellipsoid([0, 0.17, 0.034], [0.01, 0.014, 0.006], mc('#3fd2ff', 6), 10, 6));
+    for (let k = 0; k < m.vcount; k++) m.p[k * 3 + 2] *= 0.45;
+    return m;
+  })();
   // round shield: fitted planks with grain and seams, iron bands, painted sun crest, steel rim, gold boss
   {
     const sh = new Mesh(), R = 0.25, H = 0.035, SEG = 128, RINGS = 48;
