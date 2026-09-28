@@ -1940,18 +1940,18 @@ function skinHero() {
 }
 
 // ---------- cape: verlet cloth pinned across the shoulders ----------
-const CAPE = { W: 7, H: 14 };
+const CAPE = { W: 11, H: 18, CH: 0.052 };
 function capeStep(dt, snap, time) {
   const W = CAPE.W, H = CAPE.H, F = rig.F, Rc = F[2].R, cp = F[2].P;
-  const pin = (i) => V.add(cp, R3.v(Rc, [lerp(-0.18, 0.18, i / (W - 1)), 0.13 - Math.pow(Math.abs(i / (W - 1) - 0.5) * 2, 2) * 0.02, -0.215]));
+  const pin = (i) => V.add(cp, R3.v(Rc, [lerp(-0.2, 0.2, i / (W - 1)), 0.13 - Math.pow(Math.abs(i / (W - 1) - 0.5) * 2, 2) * 0.03, -0.19 + Math.pow(Math.abs(i / (W - 1) - 0.5) * 2, 2) * 0.03]));
   if (snap || !rig.cape) {
     rig.cape = [];
     for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
-      const top = pin(i), off = R3.v(Rc, [lerp(-0.18, 0.18, i / (W - 1)) * (j / (H - 1)) * 0.4, -j * 0.066, -0.02 * j]);
+      const top = pin(i), off = R3.v(Rc, [lerp(-0.2, 0.2, i / (W - 1)) * (j / (H - 1)) * 0.6, -j * CAPE.CH, -0.02 * j]);
       const q = V.add(top, off); rig.cape.push({ p: q, q: q.slice() });
     }
-    rig.capeRest = { h: 0.066, w: [] };
-    for (let j = 0; j < H; j++) rig.capeRest.w.push(0.36 / (W - 1) * (1 + 0.45 * j / (H - 1)));
+    rig.capeRest = { h: CAPE.CH, w: [] };
+    for (let j = 0; j < H; j++) rig.capeRest.w.push(0.4 / (W - 1) * (1 + 0.6 * Math.pow(j / (H - 1), 0.8)));
   }
   const C = rig.cape, g = -9.8 * dt * dt, air = [Math.sin(time * 1.4) * 0.5, 0, Math.cos(time * 1.1) * 0.35];
   const fwd = R3.v(rig.Rfull, [0, 0, 1]);
@@ -1976,14 +1976,18 @@ function capeStep(dt, snap, time) {
       if (i < W - 1) rel(C[k], C[k + 1], R.w[j], j === 0 ? 2 : 1);
       if (j < H - 1) rel(C[k], C[k + W], R.h, j === 0 ? 0 : 1);
       if (j < H - 1 && i < W - 1) rel(C[k], C[k + W + 1], Math.hypot(R.h, R.w[j]), j === 0 ? 0 : 1);
+      if (j < H - 1 && i > 0) rel(C[k], C[k + W - 1], Math.hypot(R.h, R.w[j]), j === 0 ? 0 : 1);
+      // bending springs across two cells keep the cloth from crumpling into a strip
+      if (i < W - 2 && j > 0) rel(C[k], C[k + 2], R.w[j] * 1.9, 1);
+      if (j < H - 2) rel(C[k], C[k + 2 * W], R.h * 1.96, j === 0 ? 0 : 1);
     }
     for (let k = W; k < C.length; k++) {
       const n = C[k];
       const push = (a, b, r) => { const ab = V.sub(b, a), t = clamp(V.dot(V.sub(n.p, a), ab) / V.dot(ab, ab), 0, 1), c = V.add(a, V.mul(ab, t)), d = V.sub(n.p, c), l = V.len(d); if (l < r && l > 1e-6) n.p = V.add(c, V.mul(d, r / l)); };
       push(torsoA, torsoB, 0.19);
-      // bulge over the shield on the back
-      const sc = V.add(cp, R3.v(Rc, [0.03, -0.05, 0.16])), dsc = V.sub(n.p, sc), lsc = V.len(dsc);
-      if (lsc < 0.39 && lsc > 1e-6) n.p = V.add(sc, V.mul(dsc, 0.39 / lsc));
+      // the cape hangs under the shield: keep it between the back and the shield's inner face
+      const dl = R3.v(R3.T(Rc), V.sub(n.p, cp));
+      if (Math.hypot(dl[0] - 0.03, dl[1] - 0.01) < 0.27 && dl[2] < -0.212) { dl[2] = -0.212; n.p = V.add(cp, R3.v(Rc, dl)); }
       for (const [a, b] of thighs) push(a, b, 0.1);
       const gy = heightAt(n.p[0], n.p[2]) + 0.02; if (n.p[1] < gy) n.p[1] = gy;
       // keep the cape behind the hips
@@ -1999,7 +2003,7 @@ function buildCapeVerts(out) {
     const l = C[j * W + Math.max(0, i - 1)].p, r = C[j * W + Math.min(W - 1, i + 1)].p, u = C[Math.max(0, j - 1) * W + i].p, d = C[Math.min(H - 1, j + 1) * W + i].p;
     const n = V.norm(V.cross(V.sub(r, l), V.sub(d, u)));
     const col = j >= H - 1 ? HC.trim : (i === 0 || i === W - 1 ? HC.capeIn : HC.cape);
-    out.set([p[0], p[1], p[2], n[0], n[1], n[2], col[0], col[1], col[2], col[3], i / (W - 1) * 0.34, -j * 0.066, 0.4], k * 13);
+    out.set([p[0], p[1], p[2], n[0], n[1], n[2], col[0], col[1], col[2], col[3], i / (W - 1) * 0.34, -j * 0.066 * 13 / (H - 1), 0.4], k * 13);
   }
 }
 
@@ -2766,7 +2770,7 @@ fn vnoise3(p: vec3f) -> f32 {
   base = mix(base, base * (0.35 + 1.2 * sw * sw) * (0.6 + 0.6 * smoothstep(7.0, 0.0, tr)), isPortal);
   // cape: embroidered sun crest, gold side borders, darker lining on the inner face
   let isCape = isCloth * step(0.35, p.z) * step(p.z, 0.45);
-  let cq = vec2f(p.x - 0.17, p.y + 0.3);
+  let cq = vec2f(p.x - 0.17, p.y + 0.58);
   let cr = length(cq); let ca = atan2(cq.y, cq.x);
   let scallop = step(abs(cr - 0.075 - 0.01 * cos(ca * 12.0)), 0.006);
   let spokes = step(cr, 0.03 + 0.024 * pow(abs(cos(ca * 6.0)), 6.0));
@@ -3316,7 +3320,7 @@ function addHero(L, t) {
   }
   // gear on the back
   const backM = M4.mul(rig.chestM, basisY([-0.12, 1.43, -0.17], V.norm([0.5, -0.86, -0.08])));
-  const sh = M4.mul(rig.chestM, (() => { const m = at(0.03, 1.19, -0.165); M4.rotZ(m, 0.18); M4.rotX(m, -Math.PI / 2); return m; })());
+  const sh = M4.mul(rig.chestM, (() => { const m = at(0.03, 1.19, -0.235); M4.rotZ(m, 0.18); M4.rotX(m, -Math.PI / 2); return m; })());
   L.add('shield', sh, [1, 1, 1, 0], [0.6, 0.2, 0, 0]);
   L.add('scabbard', backM, [1, 1, 1, 0], [0.5, 0.2, 0, 0]);
   const swM = rig.swordM.slice(); M4.scale(swM, 1.15);
