@@ -1323,19 +1323,23 @@ function bakeAO(mesh) {
 
 // accessory meshes (drawn as instances attached to bones)
 function buildHeroProps(M) {
-  // hair lock: a flat ribbon that tapers, bends outward and twists slightly
+  // hair lock: a clump of three tapered strands with a lens-shaped section, bending out and splitting toward pointed tips
   {
-    const c = new Mesh(), seg = 10, rings = 10;
-    for (let r = 0; r <= rings; r++) {
-      // z is scaled by the lock length at draw time, so thickness is divided down and the bend is a fraction of length
-      const t = r / rings, w = 0.5 * (1 - Math.pow(t, 2.2)) + 0.07, th = (w * 0.24 + 0.012) * 0.4, bend = -t * t * 0.3, tw = t * 0.4;
-      for (let s = 0; s <= seg; s++) {
-        const a = s / seg * TAU, x0 = Math.cos(a) * w, z0 = Math.sin(a) * th;
-        const x = x0 * Math.cos(tw) - z0 * Math.sin(tw), z = x0 * Math.sin(tw) + z0 * Math.cos(tw);
-        c.v([x, t, z - bend], [0, 0, 1], V.lerp(HC.hairDark, HC.hair, 0.3 + t * 0.5 + 0.1 * Math.cos(a)).concat([7]));
+    const c = new Mesh(), seg = 8, rings = 14;
+    for (const [x0, len, ph] of [[-0.3, 0.88, 0.7], [0, 1, 0], [0.3, 0.82, 1.9]]) {
+      const base = c.vcount;
+      for (let r = 0; r <= rings; r++) {
+        // z is scaled by the lock length at draw time, so thickness is divided down and the bend is a fraction of length
+        const t = r / rings, y = t * len, ws = (0.3 * (1 - Math.pow(t, 1.5)) + 0.012) * (0.55 + 0.45 * smooth(0, 0.12, t)), th = (ws * 0.3 + 0.006) * 0.42;
+        const bend = -y * y * 0.32, cx = x0 * (1 + 0.4 * t) + Math.sin(t * 5 + ph) * 0.025 * t;
+        for (let s = 0; s <= seg; s++) {
+          const a = s / seg * TAU;
+          const col = V.lerp(HC.hairDark, HC.hair, clamp(0.15 + t * 0.75 + 0.08 * Math.cos(a) - Math.abs(x0) * 0.2, 0, 1));
+          c.v([cx + Math.cos(a) * ws, y, Math.sin(a) * th - bend], [0, 0, 1], col.concat([7]));
+        }
       }
+      for (let r = 0; r < rings; r++) for (let s = 0; s < seg; s++) { const a = base + r * (seg + 1) + s, b = a + seg + 1; c.tri(a, b, a + 1); c.tri(a + 1, b, b + 1); }
     }
-    for (let r = 0; r < rings; r++) for (let s = 0; s < seg; s++) { const a = r * (seg + 1) + s, b = a + seg + 1; c.tri(a, b, a + 1); c.tri(a + 1, b, b + 1); }
     c.recomputeNormals();
     M.lock = c;
   }
@@ -1612,25 +1616,25 @@ const LOCKS = (() => {
   const L = [], hc = HB.headC;
   let sd0 = 3; const r = () => { sd0 = (sd0 * 16807) % 2147483647; return sd0 / 2147483647; };
   // fringe: two layers swept to one side, curling in toward the brow
-  for (let layer = 0; layer < 2; layer++) for (let k = 0; k < 9; k++) {
-    const x = -0.088 + k * 0.022 + layer * 0.011;
-    L.push({ b: [x, 1.652 - Math.abs(x) * 0.3 + layer * 0.006, 0.096 - layer * 0.008], d: [x * 2.6 + 0.35 + (r() - 0.5) * 0.2, -1, 0.55], len: 0.075 + r() * 0.03 - layer * 0.01, w: 0.052, sway: 0.6 });
+  for (let layer = 0; layer < 2; layer++) for (let k = 0; k < 13; k++) {
+    const x = -0.088 + k * 0.0147 + layer * 0.0073;
+    L.push({ b: [x, 1.652 - Math.abs(x) * 0.3 + layer * 0.006, 0.108 - layer * 0.008 - x * x * 1.2], d: [x * 2.6 + 0.35 + (r() - 0.5) * 0.2, -1, 0.75], len: 0.075 + r() * 0.035 - layer * 0.01, w: 0.042, sway: 0.6 });
   }
   // crown: layered locks sweeping back over the skull
-  for (let row = 0; row < 3; row++) for (let k = 0; k < 7; k++) {
-    const x = -0.072 + k * 0.024;
-    L.push({ b: [x * 0.95, 1.668 - row * 0.016, 0.05 - row * 0.055 - Math.abs(x) * 0.2], d: [x * 1.2 + (r() - 0.5) * 0.2, -0.3 - row * 0.25, -1], len: 0.14 + r() * 0.04, w: 0.07, sway: 0.8 });
+  for (let row = 0; row < 4; row++) for (let k = 0; k < 10; k++) {
+    const x = -0.074 + k * 0.0164 + (row % 2) * 0.008;
+    L.push({ b: [x * 0.95, 1.668 - row * 0.012, 0.05 - row * 0.042 - Math.abs(x) * 0.2], d: [x * 1.2 + (r() - 0.5) * 0.2, -0.3 - row * 0.19, -1], len: 0.14 + r() * 0.045, w: 0.052, sway: 0.8 });
   }
   // sides framing the face, ears poke through
-  for (const s of [1, -1]) for (let k = 0; k < 4; k++) L.push({ b: [0.108 * s, 1.598 - k * 0.01, 0.07 - k * 0.045], d: [0.18 * s, -1, 0.12 - k * 0.08], len: 0.1 + k * 0.018 + r() * 0.02, w: 0.058, sway: 0.7 });
+  for (const s of [1, -1]) for (let k = 0; k < 7; k++) L.push({ b: [0.108 * s, 1.598 - k * 0.006, 0.07 - k * 0.027], d: [0.18 * s, -1, 0.12 - k * 0.048], len: 0.1 + k * 0.011 + r() * 0.025, w: 0.044, sway: 0.7 });
   // back: three overlapping layers hugging the skull down to the nape
-  for (let row = 0; row < 3; row++) for (let k = 0; k < 9; k++) {
-    const x = -0.088 + k * 0.022 + (row % 2) * 0.011;
-    L.push({ b: [x * (1 - row * 0.05), 1.635 - row * 0.035, -0.118 - row * 0.004 + Math.abs(x) * 0.15], d: [x * 0.7, -1, -0.12 + row * 0.05], len: 0.12 + r() * 0.03 - row * 0.015, w: 0.068, sway: 0.9 });
+  for (let row = 0; row < 3; row++) for (let k = 0; k < 13; k++) {
+    const x = -0.088 + k * 0.0147 + (row % 2) * 0.0073;
+    L.push({ b: [x * (1 - row * 0.05), 1.635 - row * 0.035, -0.118 - row * 0.004 + Math.abs(x) * 0.15], d: [x * 0.7, -1, -0.12 + row * 0.05], len: 0.12 + r() * 0.035 - row * 0.015, w: 0.05, sway: 0.9 });
   }
   // short tail tied at the nape
-  for (let k = 0; k < 3; k++) L.push({ b: [(k - 1) * 0.014, 1.525, -0.128], d: [(k - 1) * 0.15, -1, -0.35], len: 0.15 + r() * 0.03, w: 0.05, sway: 1.4, tail: true });
-  for (const l of L) { l.d = V.norm(l.d); l.out = V.norm(V.sub(l.b, hc)); }
+  for (let k = 0; k < 5; k++) L.push({ b: [(k - 2) * 0.008, 1.525, -0.128], d: [(k - 2) * 0.1, -1, -0.35], len: 0.15 + r() * 0.035, w: 0.036, sway: 1.4, tail: true });
+  for (const l of L) { l.d = V.norm(l.d); l.out = V.norm(V.sub(l.b, hc)); l.b = V.sub(l.b, V.mul(l.out, 0.0025)); l.tone = 0.86 + r() * 0.26; }
   return L;
 })();
 
@@ -2893,7 +2897,7 @@ fn vnoise3(p: vec3f) -> f32 {
   // skin: fine pores; metal: brushed along the blade; hair: strand striations
   let pores = vnoise3(p * 1100.0);
   let brushed = vnoise3(vec3f(p.x * 900.0, p.y * 18.0, p.z * 900.0));
-  let strands = sin(p.x * 260.0 + vnoise3(p * 40.0) * 5.0) * 0.5 + 0.5;
+  let strands = sin(p.x * 150.0 + vnoise3(vec3f(p.x * 30.0, p.y * 3.0, p.z * 30.0)) * 1.5) * 0.5 + 0.5;
   let capStr = sin(atan2(p.x, p.z) * 55.0 + vnoise3(p * 35.0) * 3.0) * 0.5 + 0.5;
   let hairH = mix(strands, capStr, step(1.2, p.y));
   let embH = isEmb * step(p.y, 0.72) * step(0.63, p.y) * (1.0 - smoothstep(0.08, 0.16, abs(abs(fract(atan2(p.x, p.z) * 7.0 / 3.14159) - 0.5) * 2.0 + abs((p.y - 0.676) / 0.02) - 0.75)));
@@ -2969,7 +2973,7 @@ fn vnoise3(p: vec3f) -> f32 {
   if (!ff) { base *= 1.0 - isCape * 0.35; }
   base *= (1.0 + isStone * (stone - 0.5) * 0.5 + isGrass * (turf - 0.5) * 0.4);
   base *= (1.0 + isLeaf * (leafy - 0.5) * 0.45) * (1.0 - isBark * (1.0 - grooves) * 0.35);
-  base *= 1.0 - isCloth * (1.0 - weave) * 0.16 - isLeather * (0.55 - grain) * 0.22 - isHair * (1.0 - hairH) * 0.22;
+  base *= 1.0 - isCloth * (1.0 - weave) * 0.16 - isLeather * (0.55 - grain) * 0.22 - isHair * (1.0 - hairH) * 0.1;
   // iris fibres + dark limbal ring (only shows on the coloured part of the eye)
   let ir = length(p.xy); let ang = atan2(p.y, p.x);
   let fib = 0.8 + 0.2 * sin(ang * 46.0 + vnoise3(p * 9.0) * 6.0) - smoothstep(0.75, 1.0, ir) * 0.35 + smoothstep(0.35, 0.0, ir) * 0.2;
@@ -3504,7 +3508,7 @@ function addHero(L, t) {
     const m = at(lk.b[0], lk.b[1], lk.b[2]);
     M4.rotX(m, rig.hair[0] * lk.sway * (lk.tail ? 1.6 : 1)); M4.rotZ(m, rig.hair[1] * lk.sway);
     const z = V.mul(lk.out, -1), zz = V.norm(V.sub(z, V.mul(lk.d, V.dot(z, lk.d)))), x = V.cross(lk.d, zz);
-    L.add('lock', hm(M4.mul(m, axesM([0, 0, 0], x, lk.d, zz, lk.w, lk.len, lk.len))), [1, 1, 1, 0], [0.4, 0.25, 0, 0]);
+    L.add('lock', hm(M4.mul(m, axesM([0, 0, 0], x, lk.d, zz, lk.w, lk.len, lk.len))), [lk.tone, lk.tone * 0.98, lk.tone * 0.95, 0], [0.4, 0.25, 0, 0]);
   }
   // gear on the back
   const backM = M4.mul(rig.chestM, basisY([-0.12, 1.43, -0.17], V.norm([0.5, -0.86, -0.08])));
