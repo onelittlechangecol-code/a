@@ -2334,6 +2334,8 @@ const WGSL_SCENE = WGSL_COMMON + /* wgsl */`
 @group(0) @binding(2) var shadowSmp: sampler_comparison;
 @group(0) @binding(3) var heightTex: texture_2d<f32>;
 @group(0) @binding(4) var shadowTex2: texture_depth_2d;
+@group(0) @binding(5) var reflTex: texture_2d<f32>;
+@group(0) @binding(6) var linSmp: sampler;
 
 fn skyColor(d: vec3f) -> vec3f {
   let t = clamp(d.y, 0.0, 1.0);
@@ -2489,6 +2491,7 @@ struct TOut { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1
   base += vec3f(0.55, 0.75, 0.7) * pow(1.0 - cau, 6.0) * smoothstep(0.05, -0.4, v.wp.y) * smoothstep(-3.5, -1.0, v.wp.y) * 0.5;
   let sh = shadowAt(v.wp, n);
   var c = lighting(base, n, v.wp, 0.93, 0.0, sh, 0.0, vec3f(0.0, 1.0, 0.0));
+  if (F.misc.z > 0.5 && v.wp.y < F.fogP.z - 0.05) { discard; }
   return vec4f(applyFog(c, v.wp), 1.0);
 }
 
@@ -2518,7 +2521,9 @@ fn vnoise3(p: vec3f) -> f32 {
   let b = mix(mix(hash3(i + vec3f(0.0, 0.0, 1.0)), hash3(i + vec3f(1.0, 0.0, 1.0)), u.x), mix(hash3(i + vec3f(0.0, 1.0, 1.0)), hash3(i + vec3f(1.0, 1.0, 1.0)), u.x), u.y);
   return mix(a, b, u.z);
 }
-@fragment fn fsMesh(v: VOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
+@fragment fn fsMesh(v: VOut, @builtin(front_facing) ffRaw: bool) -> @location(0) vec4f {
+  // the mirrored reflection pass flips winding
+  let ff = select(ffRaw, !ffRaw, F.misc.z > 0.5);
   var n = normalize(v.n);
   if (!ff) { n = -n; }
   let mat = v.col.a;
@@ -2601,6 +2606,7 @@ fn vnoise3(p: vec3f) -> f32 {
   let sh = shadowAt(v.wp, n);
   var c = lighting(base, n, v.wp, v.prm.x, v.prm.y, sh, mat, normalize(v.tng));
   c += base * v.tint.a;
+  if (F.misc.z > 0.5 && v.wp.y < F.fogP.z - 0.05) { discard; }
   return vec4f(applyFog(c, v.wp), 1.0);
 }
 
@@ -2633,7 +2639,11 @@ fn waveH(p: vec2f, t: f32) -> f32 {
   var body = mix(shallow, deep, smoothstep(0.0, 7.0, depth));
   let sh = shadowAt(v.wp, vec3f(0.0, 1.0, 0.0));
   body *= (0.6 + 0.4 * sh) * (F.sunCol.rgb * 0.55 * max(F.sunDir.y, 0.0) + F.skyTop.rgb * 0.45);
-  var c = mix(body, skyColor(reflect(-vd, n)), fres);
+  // planar reflection of the island, rippled by the wave normal
+  let ruv = v.pos.xy * F.res.zw + n.xz * vec2f(0.035, 0.035) / (1.0 + dist * 0.02);
+  let rs = textureSample(reflTex, linSmp, ruv);
+  let reflCol = mix(skyColor(reflect(-vd, n)), rs.rgb, rs.a);
+  var c = mix(body, reflCol, fres);
   let h = normalize(vd + F.sunDir.xyz);
   c += F.sunCol.rgb * pow(max(dot(n, h), 0.0), 320.0) * 6.0 * sh;
   let fn1 = vnoise(p * 2.2 + vec2f(t * 0.5, -t * 0.3));
@@ -2829,12 +2839,18 @@ async function initRenderer(meshes) {
     { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'comparison' } },
     { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
     { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'depth' } },
+    { binding: 5, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+    { binding: 6, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
   ] });
   GR.shadowBGL = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: VF, buffer: { type: 'uniform' } }] });
-  GR.sceneBG = device.createBindGroup({ layout: GR.sceneBGL, entries: [
-    { binding: 0, resource: { buffer: GR.frameUB } }, { binding: 1, resource: GR.shadowView },
+  GR.frameUBR = empty(FRAME_FLOATS * 4, U.UNIFORM);
+  GR.dummyTex = device.createTexture({ size: [1, 1], format: 'rgba16float', usage: GPUTextureUsage.TEXTURE_BINDING });
+  GR.makeSceneBG = (ub, refl) => device.createBindGroup({ layout: GR.sceneBGL, entries: [
+    { binding: 0, resource: { buffer: ub } }, { binding: 1, resource: GR.shadowView },
     { binding: 2, resource: GR.cmpSampler }, { binding: 3, resource: GR.heightTex.createView() }, { binding: 4, resource: GR.shadowView2 },
+    { binding: 5, resource: refl }, { binding: 6, resource: GR.linSampler },
   ] });
+  GR.sceneBGR = GR.makeSceneBG(GR.frameUBR, GR.dummyTex.createView());
   GR.shadowBG = device.createBindGroup({ layout: GR.shadowBGL, entries: [{ binding: 0, resource: { buffer: GR.frameUB } }] });
   const scenePL = device.createPipelineLayout({ bindGroupLayouts: [GR.sceneBGL] });
   const shadowPL = device.createPipelineLayout({ bindGroupLayouts: [GR.shadowBGL] });
@@ -2861,12 +2877,17 @@ async function initRenderer(meshes) {
     fragment: { module: sceneMod, entryPoint: fs, targets: [{ format: HDR, blend: extra.blend }] },
     primitive: { topology: extra.topology || 'triangle-list', cullMode: extra.cull || 'none' },
     depthStencil: extra.depth || depthOn,
-    multisample: MS,
+    multisample: extra.ms1 ? { count: 1 } : MS,
   });
   GR.pSky = P('vsFull', 'fsSky', [], { depth: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'always' } });
   GR.pTerrain = P('vsTerrain', 'fsTerrain', [vA], { cull: 'none' });
   GR.pMesh = P('vsMesh', 'fsMesh', [vA, vI]);
   GR.pHero = P('vsHero', 'fsMesh', [vH]);
+  // single-sample variants for the half-res mirrored reflection pass
+  GR.pSkyR = P('vsFull', 'fsSky', [], { ms1: true, depth: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'always' } });
+  GR.pTerrainR = P('vsTerrain', 'fsTerrain', [vA], { ms1: true });
+  GR.pMeshR = P('vsMesh', 'fsMesh', [vA, vI], { ms1: true });
+  GR.pHeroR = P('vsHero', 'fsMesh', [vH], { ms1: true });
   GR.pWater = P('vsWater', 'fsWater', [vA], { blend: premul, depth: depthRO });
   GR.pPart = P('vsPart', 'fsPart', [vP], { blend: premul, depth: depthRO });
   GR.pTrail = P('vsLine', 'fsTrail', [vL], { blend: premul, depth: depthRO });
@@ -2898,12 +2919,15 @@ function resizeTargets() {
   if (pix > maxPix) { const s = Math.sqrt(maxPix / pix); w = Math.floor(w * s); h = Math.floor(h * s); }
   if (GR.w === w && GR.h === h) return;
   GR.w = w; GR.h = h; canvas.width = w; canvas.height = h;
-  for (const k of ['msColor', 'msDepth', 'hdr', 'bloomA', 'bloomB']) GR[k] && GR[k].destroy();
+  for (const k of ['msColor', 'msDepth', 'hdr', 'bloomA', 'bloomB', 'reflColor', 'reflDepth']) GR[k] && GR[k].destroy();
   const RA = GPUTextureUsage.RENDER_ATTACHMENT, TB = GPUTextureUsage.TEXTURE_BINDING;
   GR.msColor = d.createTexture({ size: [w, h], format: 'rgba16float', sampleCount: 4, usage: RA });
   GR.msDepth = d.createTexture({ size: [w, h], format: 'depth24plus', sampleCount: 4, usage: RA });
   GR.hdr = d.createTexture({ size: [w, h], format: 'rgba16float', usage: RA | TB });
   const bw = Math.max(1, w >> 1), bh = Math.max(1, h >> 1);
+  GR.reflColor = d.createTexture({ size: [bw, bh], format: 'rgba16float', usage: RA | TB });
+  GR.reflDepth = d.createTexture({ size: [bw, bh], format: 'depth24plus', usage: RA });
+  GR.sceneBG = GR.makeSceneBG(GR.frameUB, GR.reflColor.createView());
   GR.bloomA = d.createTexture({ size: [bw, bh], format: 'rgba16float', usage: RA | TB });
   GR.bloomB = d.createTexture({ size: [bw, bh], format: 'rgba16float', usage: RA | TB });
   const bg = (pipe, entries) => d.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries });
@@ -2991,6 +3015,14 @@ function frameUniforms() {
   c2[0] = Math.round(c2[0] / unit2) * unit2; c2[1] = Math.round(c2[1] / unit2) * unit2;
   f.set(M4.mul(M4.ortho(c2[0] - ext2, c2[0] + ext2, c2[1] - ext2, c2[1] + ext2, -c2[2] - 40, -c2[2] + 40), lv), 88);
   GR.device.queue.writeBuffer(GR.frameUB, 0, f);
+  // mirrored camera for the water reflection (reflect across the water plane, clip below it)
+  const mirror = M4.id(); mirror[5] = -1; mirror[13] = 2 * WORLD.water;
+  const vpR = M4.mul(proj, M4.mul(view, mirror));
+  const fr = GR.frameDataR || (GR.frameDataR = new Float32Array(FRAME_FLOATS));
+  fr.set(f); fr.set(vpR, 0); fr.set(M4.invert(vpR), 16);
+  fr.set([cam.pos[0], 2 * WORLD.water - cam.pos[1], cam.pos[2], state.time], 48);
+  fr[78] = 1; fr[72] = GR.w / 2; fr[73] = GR.h / 2; fr[74] = 2 / GR.w; fr[75] = 2 / GR.h;
+  GR.device.queue.writeBuffer(GR.frameUBR, 0, fr);
   // sun position on screen for the god-ray pass
   const sp = V.add(cam.pos, V.mul(SUN, 500));
   const cx = vp[0] * sp[0] + vp[4] * sp[1] + vp[8] * sp[2] + vp[12], cy = vp[1] * sp[0] + vp[5] * sp[1] + vp[9] * sp[2] + vp[13], cw = vp[3] * sp[0] + vp[7] * sp[1] + vp[11] * sp[2] + vp[15];
@@ -3252,6 +3284,25 @@ function render() {
     drawGroups(pass, GR.dynGroups, GR.dynIB);
     if (heroVisible) {
       pass.setPipeline(GR.psHero2);
+      pass.setVertexBuffer(0, GR.heroVB); pass.setIndexBuffer(GR.heroIB, 'uint32'); pass.drawIndexed(GR.heroCount);
+      pass.setVertexBuffer(0, GR.capeVB); pass.setIndexBuffer(GR.capeIB, 'uint32'); pass.drawIndexed(GR.capeCount);
+    }
+    pass.end();
+  }
+  // --- mirrored reflection pass (half resolution) ---
+  {
+    const pass = enc.beginRenderPass({
+      colorAttachments: [{ view: GR.reflColor.createView(), clearValue: { r: 0, g: 0, b: 0, a: 0 }, loadOp: 'clear', storeOp: 'store' }],
+      depthStencilAttachment: { view: GR.reflDepth.createView(), depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'discard' },
+    });
+    pass.setBindGroup(0, GR.sceneBGR);
+    pass.setPipeline(GR.pSkyR); pass.draw(3);
+    pass.setPipeline(GR.pTerrainR); pass.setVertexBuffer(0, GR.terrVB); pass.setIndexBuffer(GR.terrIB, 'uint32'); pass.drawIndexed(GR.terrCount);
+    pass.setPipeline(GR.pMeshR); pass.setVertexBuffer(0, GR.meshVB); pass.setIndexBuffer(GR.meshIB, 'uint32');
+    drawGroups(pass, GR.staticGroups.filter(g => !GR.shadowSkip.has(g.mesh)), GR.staticIB);
+    drawGroups(pass, GR.dynGroups, GR.dynIB);
+    if (heroVisible) {
+      pass.setPipeline(GR.pHeroR);
       pass.setVertexBuffer(0, GR.heroVB); pass.setIndexBuffer(GR.heroIB, 'uint32'); pass.drawIndexed(GR.heroCount);
       pass.setVertexBuffer(0, GR.capeVB); pass.setIndexBuffer(GR.capeIB, 'uint32'); pass.drawIndexed(GR.capeCount);
     }
