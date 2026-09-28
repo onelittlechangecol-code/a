@@ -884,6 +884,7 @@ function tubeMesh(a, b, rFn, cFn, seg = 18, rings = 10, caps = [true, true]) {
   for (let i = 0; i < prof.length - 1; i++) for (let j = 0; j < seg; j++) { const q = i * (seg + 1) + j, w = q + seg + 1; m.tri(q, w, q + 1); m.tri(q + 1, w, w + 1); }
   return m;
 }
+function G(x, y, cx, cy, sx, sy) { return Math.exp(-(((x - cx) / sx) ** 2) - (((y - cy) / sy) ** 2)); }
 // radial displacement of a tube's surface by (t along a->b, angle around it): folds and wrinkles
 function wrinkle(m, a, b, fn) {
   const ax = V.sub(b, a), L = V.len(ax), y = V.norm(ax), ref = Math.abs(y[2]) > 0.9 ? [1, 0, 0] : [0, 0, 1];
@@ -933,32 +934,58 @@ function buildHero() {
   const parts = [];
   const P = (mesh, bones, custom = null) => parts.push({ mesh, bones, custom });
   // ---- head ----
-  P(ellipsoid(HB.headC, [0.112, 0.132, 0.122], (n0) => {
-    const near = (c, r) => Math.max(0, 1 - Math.hypot(n0[0] - c[0], n0[1] - c[1], n0[2] - c[2]) / r);
-    const ax = Math.abs(n0[0]);
-    const cheek = Math.max(0, 1 - Math.hypot(ax - 0.55, n0[1] + 0.22, n0[2] - 0.72) / 0.3);
-    const socket = Math.max(0, 1 - Math.hypot(ax - 0.37, n0[1] - 0.1, n0[2] - 0.92) / 0.2);
-    const lips = Math.max(0, 1 - Math.hypot(n0[0] / 1.7, (n0[1] + 0.36) * 1.9, n0[2] - 0.93) / 0.1);
-    let c = V.lerp(HC.skin, HC.blush, cheek * 0.5 + near([0, -0.12, 0.99], 0.12) * 0.35);
-    c = V.lerp(c, V.mul(HC.skin, 0.78), socket * 0.35);
-    c = V.lerp(c, HC.lip, smooth(0.25, 0.7, lips) * 0.75);
-    c = V.mul(c, 1 - smooth(-0.45, -0.85, n0[1]) * 0.12);
+  // sculpted in metric face space (X across, Y up from the head centre, forward along the normal):
+  // realistic thirds (eyes at mid-height, nose base halfway to the chin, mouth a third below it),
+  // carved sockets, brow ridge, a real nose with bridge, tip and alae, philtrum, shaped lips, chin, cheekbones and jaw
+  const FACE = {
+    disp(X, Y, front) {
+      const ax = Math.abs(X);
+      let d = 0;
+      d += -0.0105 * G(ax, Y, 0.041, 0.006, 0.023, 0.0125);                 // eye sockets
+      d += 0.005 * G(ax, Y, 0.04, 0.027, 0.026, 0.008);                // brow ridge
+      d += 0.0022 * G(X, Y, 0, 0.022, 0.011, 0.01);                       // glabella
+      d += 0.0065 * G(ax, Y, 0.058, -0.02, 0.021, 0.015);                // cheekbones
+      d += -0.0028 * G(ax, Y, 0.05, -0.062, 0.019, 0.016);                // cheek hollows
+      d += -0.002 * G(ax, Y, 0.072, 0.03, 0.014, 0.02);                   // temples
+      d += -0.0025 * G(X, Y, 0, -0.074, 0.04, 0.022);                      // maxilla / muzzle
+      // nose: bridge rising from between the eyes to the tip, alae and a soft tip ball
+      const t = clamp((0.012 - Y) / 0.056, 0, 1), w = 0.0072 + 0.0052 * t;
+      d += (0.0025 + 0.0175 * Math.pow(t, 1.35)) * Math.exp(-((X / w) ** 2)) * smooth(0.02, 0.006, Y) * smooth(-0.056, -0.045, Y);
+      d += 0.0075 * G(X, Y, 0, -0.043, 0.0098, 0.0078);
+      d += 0.0085 * G(ax, Y, 0.015, -0.047, 0.0075, 0.0068);
+      d += -0.0014 * G(ax, Y, 0.026, -0.062, 0.0045, 0.013);                // nasolabial crease
+      // mouth: philtrum, cupid's bow upper lip, parted line, fuller lower lip, mentolabial groove, chin
+      d += -0.0011 * G(X, Y, 0, -0.061, 0.0034, 0.0055) + 0.0007 * G(ax, Y, 0.0048, -0.061, 0.0018, 0.0055);
+      d += 0.0026 * G(X, Y + 0.0013 * Math.cos(X * 160) * G(X, 0, 0, 0, 0.014, 1), 0, -0.068, 0.03, 0.0042);
+      d += -0.0026 * G(X, Y + 0.003 * (X / 0.03) ** 2, 0, -0.0732, 0.033, 0.0013);
+      d += 0.0032 * G(X, Y, 0, -0.0792, 0.025, 0.0052);
+      d += -0.0024 * G(X, Y, 0, -0.0885, 0.015, 0.0042);
+      d += 0.011 * G(X, Y, 0, -0.107, 0.02, 0.014);
+      return d * front;
+    },
+  };
+  P(ellipsoid(HB.headC, [0.11, 0.132, 0.12], (n0, q) => {
+    const X = q[0], Y = q[1], front = smooth(0.25, 0.65, n0[2]), ax = Math.abs(X);
+    // skin tones: warm flush on cheeks, nose and ears, cooler under the eyes and along the jaw, lips blended in
+    let c = HC.skin.slice(0, 3);
+    c = V.lerp(c, HC.blush, (0.22 * G(ax, Y, 0.05, -0.035, 0.024, 0.022) + 0.2 * G(X, Y, 0, -0.045, 0.012, 0.012)) * front);
+    c = V.lerp(c, V.mul(HC.skin, 0.88), 0.15 * G(ax, Y, 0.041, -0.009, 0.018, 0.006) * front);
+    c = V.lerp(c, [0.8, 0.64, 0.56], 0.1 * smooth(-0.06, -0.11, Y) * (1 - G(X, Y, 0, -0.107, 0.02, 0.014)));
+    const lip = Math.max(G(X, Y + 0.0013 * Math.cos(X * 160) * G(X, 0, 0, 0, 0.014, 1), 0, -0.069, 0.028, 0.0036), G(X, Y, 0, -0.0795, 0.024, 0.0045));
+    c = V.lerp(c, HC.lip, smooth(0.35, 0.8, lip) * 0.45 * front);
+    c = V.lerp(c, V.mul(HC.lip, 0.8), G(X, Y, 0, -0.068, 0.027, 0.0035) * 0.35 * front);
+    c = V.lerp(c, [0.3, 0.12, 0.1], G(X, Y + 0.003 * (X / 0.03) ** 2, 0, -0.0732, 0.032, 0.0008) * 0.85 * front);
+    c = V.lerp(c, [0.36, 0.17, 0.14], G(ax, Y, 0.031, -0.0745, 0.003, 0.002) * 0.7 * front);
+    c = V.lerp(c, [0.3, 0.14, 0.12], G(ax, Y, 0.0085, -0.0515, 0.0032, 0.0018) * smooth(0, -0.4, n0[1] - 0.2) * 0.9);
     return c.concat([1]);
-  }, 56, 46, (q, n0) => {
-    if (n0[1] < 0) { const k = -n0[1]; q[0] *= 1 - 0.24 * Math.pow(k, 1.3); q[2] += 0.014 * k * k * Math.max(0, n0[2]); }
+  }, 110, 90, (q, n0) => {
+    if (n0[1] < 0) { const k = -n0[1]; q[0] *= 1 - 0.17 * Math.pow(k, 1.4); q[2] += 0.005 * k * k * Math.max(0, n0[2]); }
     if (n0[2] < -0.3) q[2] *= 0.94;
-    const bump = (c, r, amt) => { const dd = Math.hypot(n0[0] - c[0], n0[1] - c[1], n0[2] - c[2]); if (dd < r) q = V.add(q, V.mul(n0, amt * (0.5 + 0.5 * Math.cos(dd / r * Math.PI)))); };
-    for (const s of [1, -1]) {
-      bump([s * 0.37, 0.08, 0.92], 0.22, -0.006);   // eye sockets
-      bump([s * 0.34, 0.3, 0.89], 0.17, 0.0035);    // brow ridge
-      bump([s * 0.56, -0.14, 0.8], 0.24, 0.0045);   // cheekbones
-      bump([s * 0.42, -0.5, 0.74], 0.2, -0.002);    // soft hollow under the cheek
-    }
-    bump([0, -0.36, 0.93], 0.13, 0.003);            // lips
-    bump([0, -0.56, 0.82], 0.16, 0.003);            // chin
-    const nb = Math.exp(-Math.pow(n0[0] / 0.075, 2)) * smooth(0.28, 0.08, n0[1]) * smooth(-0.26, -0.06, n0[1]) * Math.max(0, n0[2] - 0.8) * 5;
-    q = V.add(q, V.mul(n0, 0.008 * nb));            // nose bridge
-    return q;
+    const front = smooth(0.25, 0.65, n0[2]);
+    const d = FACE.disp(q[0], q[1], front);
+    // the nose and lips push straight forward; everything else along the surface normal
+    const fw = G(q[0], q[1], 0, -0.05, 0.02, 0.04);
+    return V.add(q, V.add(V.mul(n0, d * (1 - fw)), [0, 0, d * fw]));
   }), [BI.head]);
   // hair cap: covers crown, back and sides; leaves the face open
   const hc = HB.headC;
@@ -1312,15 +1339,35 @@ function buildHeroProps(M) {
     c.recomputeNormals();
     M.lock = c;
   }
-  M.eyeW = ellipsoid([0, 0, 0], [1, 1, 1], HC.eyeW, 18, 12);
+  M.eyeW = ellipsoid([0, 0, 0], [1, 1, 1], (n0) => V.lerp(HC.eyeW, [0.93, 0.76, 0.72], smooth(0.55, 0.95, Math.abs(n0[0])) * 0.6).concat([6]), 24, 16);
   M.iris = ellipsoid([0, 0, 0], [1, 1, 1], (n0) => V.lerp(HC.irisDark, HC.iris, smooth(0.2, 0.9, Math.hypot(n0[0], n0[1]) < 0.6 ? 1 - Math.hypot(n0[0], n0[1]) : 0.2)).concat([6]), 18, 12);
   M.pupil = ellipsoid([0, 0, 0], [1, 1, 1], HC.pupil, 12, 8);
   M.skinBlob = ellipsoid([0, 0, 0], [1, 1, 1], HC.skin, 14, 10);
-  M.lipBlob = ellipsoid([0, 0, 0], [1, 1, 1], HC.lip, 12, 8);
+  M.lipBlob = ellipsoid([0, 0, 0], [1, 1, 1], [0.2, 0.06, 0.06, 1], 12, 8);
   M.browBlob = ellipsoid([0, 0, 0], [1, 1, 1], HC.brow, 10, 6);
-  // eyelids: skin-coloured half shells that slide over the eye
-  M.lidUp = keepTris(ellipsoid([0, 0, 0], [1, 1, 1], HC.skin, 20, 14), p => p[1] > -0.02);
-  M.lidLo = keepTris(ellipsoid([0, 0, 0], [1, 1, 1], HC.skin, 20, 14), p => p[1] < 0.02);
+  // eyelids: spherical skin shells hinged on the eyeball centre, with a rolled margin, crease shading and a dark lash line
+  const lidMesh = (upper) => {
+    const m = new Mesh(), NP = 14, NT = 28, T0 = 1.85;
+    const rows = [];
+    for (let i = 0; i <= NP; i++) rows.push([0.08 + i / NP * (Math.PI / 2 - 0.08), 1]);
+    rows.push([Math.PI / 2 + 0.05, 0.985], [Math.PI / 2 + 0.08, 0.93]);
+    rows.forEach(([ph, r], i) => {
+      for (let j = 0; j <= NT; j++) {
+        const th = lerp(-T0, T0, j / NT), side = Math.abs(th) / T0;
+        const phe = Math.min(ph, Math.PI / 2 + 0.08) - (i >= NP ? 0 : 0) + (ph >= Math.PI / 2 ? -0.18 * side * side : 0);
+        const p = [Math.sin(phe) * Math.sin(th) * r, Math.cos(phe) * r, Math.sin(phe) * Math.cos(th) * r];
+        const crease = upper ? G(ph, 0, 0.95, 0, 0.12, 1) : 0;
+        let c = V.lerp(HC.skin, V.mul(HC.blush, 0.85), crease * 0.55 + (i > NP ? 0.3 : 0));
+        if (upper && i >= NP - 1) c = i >= NP ? [0.1, 0.06, 0.045] : V.lerp(HC.skin, [0.25, 0.15, 0.1], 0.6);
+        if (!upper && i >= NP) c = V.lerp(HC.skin, [0.55, 0.32, 0.28], 0.5);
+        m.v(p, V.norm(p), c.concat([1]));
+      }
+    });
+    for (let i = 0; i < rows.length - 1; i++) for (let j = 0; j < NT; j++) { const a = i * (NT + 1) + j, b = a + NT + 1; m.tri(a, b, a + 1); m.tri(a + 1, b, b + 1); }
+    return m;
+  };
+  M.lidUp = lidMesh(true);
+  M.lidLo = lidMesh(false);
   // closed-mouth smile: a thin arc curving up at the corners
   { const pts = []; for (let k = 0; k <= 8; k++) { const x = -1 + k / 4; pts.push([x, 0.35 * x * x, 0]); }
     const sm = new Mesh(); for (let k = 0; k < 8; k++) sm.merge(tubeMesh(pts[k], pts[k + 1], () => 0.16, () => HC.lip, 6, 1)); M.smile = sm; }
@@ -2709,7 +2756,9 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
   let nv = max(dot(n, v), 0.0);
   let F0 = mix(vec3f(0.04), base, metal);
   let fres = F0 + (vec3f(1.0) - F0) * pow(1.0 - nv, 5.0);
-  var c = base * (1.0 - metal * 0.9) * (F.sunCol.rgb * wrap * sh * F.sunDir.w + hemi * 0.62);
+  // skin and foliage scatter warm light into their shadows instead of picking up the blue sky
+  let amb = hemi * mix(vec3f(1.0), vec3f(1.08, 0.93, 0.86), sss);
+  var c = base * (1.0 - metal * 0.9) * (F.sunCol.rgb * wrap * sh * F.sunDir.w + amb * 0.62);
   if (sss > 0.0) {
     // light bleeding past the terminator and through thin edges, warm tinted
     let bleed = clamp((nl + 0.6) / 1.6, 0.0, 1.0) - clamp(nl, 0.0, 1.0);
@@ -2860,7 +2909,7 @@ fn vnoise3(p: vec3f) -> f32 {
   let mailFade = smoothstep(0.02, 0.006, fp);
   let h = isMail * ringH * mailFade * 0.0022 + isStone * stone * 0.035 + isGrass * turf * 0.012 + isLeaf * leafy * 0.02 + isBark * (grooves * 0.6 + vnoise3(p * 12.0) * 0.4) * 0.025 + embH * 0.0008 + isCloth * weave * smoothstep(0.004, 0.0012, fp) * 0.00045
         + isLeather * grain * smoothstep(0.006, 0.0015, fp) * 0.0006
-        + isSkin * pores * smoothstep(0.003, 0.0008, fp) * 0.00012
+        + isSkin * pores * smoothstep(0.0015, 0.0004, fp) * 0.00002
         + isMetal * brushed * 0.00008
         + isHair * hairH * smoothstep(0.012, 0.003, fp) * 0.0004;
   // bump from a height field using screen-space derivatives (no tangents needed)
@@ -3432,25 +3481,24 @@ function addHero(L, t) {
   const bl = rig.blink > 0 ? 0.1 : 1, hurtEyes = st === 'hurt' ? 0.35 : 1, fierce = st === 'attack' || st === 'charge' || st === 'pound';
   const lx = clamp(p.lookYaw * 0.4, -0.3, 0.3), ly = clamp(-p.lookPitch * 0.4, -0.25, 0.25);
   for (const s of [1, -1]) {
-    const e = at(s * 0.044, 1.546, 0.1265); M4.rotY(e, s * 0.32);
-    const w = e.slice(); M4.scale(w, 0.027, 0.033, 0.0095); L.add('eyeW', hm(w), [1, 1, 1, 0.05], [0.1, 0.1, 0, 0]);
-    // lids: resting slightly lowered, fully closed on a blink, squinting when hurt or fierce
-    const closeU = bl < 1 ? 1.08 : (hurtEyes < 1 ? 0.8 : (fierce ? 0.5 : 0.28)), closeL = bl < 1 ? 0.25 : (hurtEyes < 1 ? 0.45 : 0.12);
-    const lu = e.slice(); M4.translate(lu, 0, 0, 0.0012); M4.scale(lu, 0.0292, 0.035 * closeU, 0.0108); L.add('lidUp', hm(lu), [1, 1, 1, 0], [0.5, 0.2, 0, 0]);
-    const lo = e.slice(); M4.translate(lo, 0, 0, 0.0008); M4.scale(lo, 0.0288, 0.034 * closeL, 0.0104); L.add('lidLo', hm(lo), [1, 1, 1, 0], [0.5, 0.2, 0, 0]);
-    const lash = e.slice(); M4.translate(lash, 0, 0.034 - 0.068 * Math.max(0, closeU - 0.28) / 0.8, 0.005); M4.rotZ(lash, -s * 0.12); M4.scale(lash, 0.031, 0.0045, 0.009); L.add('browBlob', hm(lash), [0.5, 0.4, 0.4, 0], [0.4, 0, 0, 0]);
-    const ir = e.slice(); M4.translate(ir, lx * 0.012, ly * 0.012 - 0.002, 0.0072); M4.scale(ir, 0.0165, 0.02, 0.0055); L.add('iris', hm(ir), [1, 1, 1, 0.12], [0.1, 0, 0, 0]);
-    const pu = e.slice(); M4.translate(pu, lx * 0.013, ly * 0.013 - 0.002, 0.0112); M4.scale(pu, 0.009, 0.011, 0.004); L.add('pupil', hm(pu), [1, 1, 1, 0], [0.1, 0, 0, 0]);
-    const gl = e.slice(); M4.translate(gl, lx * 0.012 + 0.006, ly * 0.012 + 0.007, 0.0142); M4.scale(gl, 0.0036 * (bl < 1 ? 0 : 1)); L.add('eyeW', hm(gl), [1, 1, 1, 2.2], [0.1, 0, 0, 0]);
-    const br = at(s * 0.047, 1.589 - (fierce ? 0.005 : 0), 0.123); M4.rotY(br, s * 0.3); M4.rotZ(br, -s * (fierce ? 0.3 : 0.06)); M4.scale(br, -s * 0.024, 0.022, 0.01);
+    // eyeball: a real-sized sphere; the iris disc and pupil turn with the gaze, lids hinge on its centre
+    const E = [s * 0.041, 1.5415, 0.1015], ER = 0.0162;
+    const w = at(E[0], E[1], E[2]); M4.scale(w, ER); L.add('eyeW', hm(w), [0.92, 0.9, 0.88, 0.0], [0.05, 0.1, 0, 0]);
+    const g = at(E[0], E[1], E[2]); M4.rotY(g, lx * 0.9 + s * 0.04); M4.rotX(g, -ly * 0.9);
+    const ir = g.slice(); M4.translate(ir, 0, 0, ER - 0.0014); M4.scale(ir, 0.0079, 0.0079, 0.0022); L.add('iris', hm(ir), [1, 1, 1, 0.1], [0.1, 0, 0, 0]);
+    const pu = g.slice(); M4.translate(pu, 0, 0, ER - 0.0004); M4.scale(pu, 0.0031, 0.0031, 0.0009); L.add('pupil', hm(pu), [1, 1, 1, 0], [0.1, 0, 0, 0]);
+    const gl = g.slice(); M4.translate(gl, 0.0028, 0.0032, ER + 0.0002); M4.scale(gl, 0.0014 * (bl < 1 ? 0 : 1)); L.add('eyeW', hm(gl), [1, 1, 1, 2.4], [0.1, 0, 0, 0]);
+    // lids: open with the upper edge over the top of the iris; squint when hurt or fierce; meet on a blink
+    const aU = bl < 1 ? -0.3 : (hurtEyes < 1 ? 0.08 : (fierce ? 0.26 : 0.5)), aL = bl < 1 ? 0.2 : (hurtEyes < 1 ? 0.16 : (fierce ? 0.26 : 0.4));
+    const lu = at(E[0], E[1], E[2]); M4.rotX(lu, -aU); M4.scale(lu, ER * 1.07 * s, ER * 1.07, ER * 1.07); L.add('lidUp', hm(lu), [0.9, 0.84, 0.82, 0], [0.5, 0.2, 0, 0]);
+    const lo = at(E[0], E[1], E[2]); M4.rotX(lo, aL); M4.scale(lo, ER * 1.05, -ER * 1.05, ER * 1.05); L.add('lidLo', hm(lo), [0.92, 0.86, 0.84, 0], [0.5, 0.2, 0, 0]);
+    const br = at(s * 0.04, 1.5625 - (fierce ? 0.004 : 0), 0.1262); M4.rotY(br, s * 0.36); M4.rotZ(br, -s * (fierce ? 0.28 : -0.04)); M4.scale(br, -s * 0.026, 0.012, 0.005);
     L.add('browArc', hm(br), [1, 1, 1, 0], [0.5, 0, 0, 0]);
     // pointed ear
-    const eb = [s * 0.104, 1.542, 0.004], ed = V.norm([s * 0.85, 0.42, -0.36]), ez = V.norm(V.sub([0, 0, 1], V.mul(ed, ed[2]))), ex = V.cross(ed, ez);
-    L.add('ear', hm(axesM(eb, ex, ed, ez, 0.03, 0.1, 0.012)), [1, 1, 1, 0], [0.5, 0.3, 0, 0]);
+    const eb = [s * 0.102, 1.524, 0.004], ed = V.norm([s * 0.85, 0.42, -0.36]), ez = V.norm(V.sub([0, 0, 1], V.mul(ed, ed[2]))), ex = V.cross(ed, ez);
+    L.add('ear', hm(axesM(eb, ex, ed, ez, 0.028, 0.09, 0.011)), [1, 1, 1, 0], [0.5, 0.3, 0, 0]);
   }
-  const no = at(0, 1.527, 0.133); M4.rotX(no, -0.35); M4.scale(no, 0.012, 0.018, 0.013); L.add('skinBlob', hm(no), [1, 1, 1, 0], [0.5, 0.2, 0, 0]);
-  if (rig.mouth > 0.32) { const mo = at(0, 1.482, 0.12); M4.scale(mo, 0.016 - rig.mouth * 0.003, 0.002 + (rig.mouth - 0.3) * 0.012, 0.006); L.add('lipBlob', hm(mo), [1, 1, 1, 0], [0.4, 0, 0, 0]); }
-  else { const sm = at(0, 1.483, 0.1305); M4.rotX(sm, -0.3); M4.scale(sm, 0.018, fierce ? 0.004 : 0.01, 0.014); L.add('smile', hm(sm), [1, 1, 1, 0], [0.4, 0, 0, 0]); }
+  if (rig.mouth > 0.32) { const mo = at(0, 1.4618, 0.1205); M4.scale(mo, 0.013 - rig.mouth * 0.002, 0.0015 + (rig.mouth - 0.3) * 0.009, 0.005); L.add('lipBlob', hm(mo), [1, 1, 1, 0], [0.4, 0, 0, 0]); }
   // hair locks with spring sway
   for (const lk of LOCKS) {
     const m = at(lk.b[0], lk.b[1], lk.b[2]);
