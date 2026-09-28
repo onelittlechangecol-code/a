@@ -459,13 +459,32 @@ function buildMeshes() {
   })();
 
   // world props
-  M.trunk = cylMesh(9, 0.42, 0.24, 3.4, COL.trunk, false, (p) => V.mul(COL.trunk, 0.8 + 0.4 * hash2(Math.floor(p[1] * 6), Math.floor(Math.atan2(p[0], p[2]) * 3))));
+  // trunk with root flare and three branches reaching into the crown (bark material 10)
+  {
+    const bark = [...COL.trunk, 10], barkDark = [...V.mul(COL.trunk, 0.7), 10];
+    const t = new Mesh();
+    t.merge(tubeMesh([0, -0.3, 0], [0, 3.1, 0], (u) => lerp(0.46, 0.22, Math.pow(u, 0.7)) + (u < 0.12 ? (0.12 - u) * 1.6 : 0), () => bark, 14, 10, [false, true]));
+    for (let k = 0; k < 4; k++) {
+      const a = k / 4 * TAU + 0.5, y0 = 2.0 + k * 0.25;
+      const end = [Math.sin(a) * 0.85, y0 + 0.9, Math.cos(a) * 0.85];
+      t.merge(tubeMesh([Math.sin(a) * 0.12, y0, Math.cos(a) * 0.12], end, (u) => lerp(0.13, 0.04, u), () => barkDark, 8, 4));
+    }
+    M.trunk = t;
+  }
   for (let v = 0; v < 3; v++) {
-    const sd = v * 7.13;
-    M['canopy' + v] = icoMesh(2, (p, n) => {
-      const t = smooth(-0.8, 0.9, p[1] + n[1] * 0.2);
-      return V.mul(V.lerp(COL.leaf, COL.leaf2, t), 0.75 + 0.4 * hash2(Math.floor(p[0] * 9 + sd), Math.floor(p[2] * 9 + p[1] * 5)));
-    }, (d) => 0.85 + 0.35 * noise3(d[0] * 2.2 + sd, d[1] * 2.2, d[2] * 2.2));
+    // leafy crown: many smooth, lumpy clumps (foliage material 8)
+    let sd0 = 11 + v * 97; const r = () => { sd0 = (sd0 * 16807) % 2147483647; return sd0 / 2147483647; };
+    const cm = new Mesh(), n = 12 + v * 2;
+    const lite = hexToRgb(['#8fcf4a', '#a4d45a', '#7cc04a'][v]), dark = hexToRgb(['#3d7a2c', '#4a8a2e', '#356f2a'][v]);
+    for (let k = 0; k < n; k++) {
+      const a = r() * TAU, y = -0.35 + r() * 0.9, rr = (1 - Math.abs(y - 0.1) * 0.9) * (0.45 + r() * 0.35);
+      const pos = [Math.sin(a) * rr, y, Math.cos(a) * rr], s = 0.36 + r() * 0.2, seed = r() * 50;
+      cm.merge(ellipsoid(pos, [s, s * 0.82, s], (n0) => {
+        const up = smooth(-0.9, 0.9, n0[1] * 0.7 + (y + 0.35) * 0.6);
+        return V.mul(V.lerp(dark, lite, up), 0.88 + 0.24 * hash2(k, 3)).concat([8]);
+      }, 14, 10, (q, n0) => V.mul(q, 0.82 + 0.34 * noise3(n0[0] * 2.3 + seed, n0[1] * 2.3, n0[2] * 2.3 - seed))));
+    }
+    M['canopy' + v] = cm;
     M['rock' + v] = icoMesh(2, (p, n) => V.lerp(V.mul(COL.rock, 0.8 + 0.35 * hash2(Math.floor(p[0] * 7 + sd), Math.floor(p[1] * 7 + p[2] * 3))), COL.moss, smooth(0.55, 0.85, n[1]) * 0.85),
       (d) => 0.72 + 0.45 * noise3(d[0] * 1.6 + sd, d[1] * 1.6 + sd, d[2] * 1.6));
   }
@@ -2245,7 +2264,8 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
   else if (m == 5) { rough = 0.28; metal = 1.0; }
   else if (m == 6) { rough = 0.05; }
   else if (m == 7) { rough = 0.38; sheen = 0.4; }
-  else if (m == 8) { rough = 0.7; sss = 0.45; }
+  else if (m == 8) { rough = 0.7; sss = 0.55; }
+  else if (m == 10) { rough = 0.92; }
   let v = normalize(F.camPos.xyz - wp); let l = F.sunDir.xyz;
   let nl = dot(n, l);
   // soft wrap for a painterly, forgiving look
@@ -2312,10 +2332,17 @@ struct TOut { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1
   var o: TOut; o.pos = F.viewProj * vec4f(i.pos, 1.0); o.wp = i.pos; o.n = i.nrm; o.col = i.col.rgb; return o;
 }
 @fragment fn fsTerrain(v: TOut) -> @location(0) vec4f {
-  let n = normalize(v.n);
+  var n = normalize(v.n);
   let d1 = fbm(v.wp.xz * 0.45);
   let d2 = vnoise(v.wp.xz * 3.1);
-  var base = v.col * (0.84 + 0.28 * d1) * (0.94 + 0.12 * d2);
+  let rockW = smoothstep(0.86, 0.66, n.y);
+  let strata = fbm(vec2f(v.wp.x * 0.6 + v.wp.z * 0.6, v.wp.y * 3.5)) ;
+  let grassMicro = vnoise(v.wp.xz * 11.0) * 0.6 + vnoise(v.wp.xz * 27.0) * 0.4;
+  let th = grassMicro * 0.02 * (1.0 - rockW) + strata * 0.22 * rockW;
+  let dhx = dpdx(th); let dhy = dpdy(th); let px = dpdx(v.wp); let py = dpdy(v.wp);
+  let r1 = cross(py, n); let r2 = cross(n, px); let det = dot(px, r1);
+  n = normalize(abs(det) * n - sign(det) * (dhx * r1 + dhy * r2));
+  var base = v.col * (0.84 + 0.28 * d1) * (0.94 + 0.12 * d2) * (0.9 + 0.2 * mix(grassMicro, strata, rockW));
   base *= 1.0 - smoothstep(0.35, -0.15, v.wp.y) * 0.35;
   let sh = shadowAt(v.wp, n);
   var c = lighting(base, n, v.wp, 0.93, 0.0, sh, 0.0, vec3f(0.0, 1.0, 0.0));
@@ -2355,6 +2382,7 @@ fn vnoise3(p: vec3f) -> f32 {
   let isSkin = 1.0 - step(0.5, abs(mat - 1.0)); let isEmb = 1.0 - step(0.5, abs(mat - 9.0)); let isCloth = 1.0 - step(0.5, abs(mat - 2.0)) + isEmb;
   let isLeather = 1.0 - step(0.5, abs(mat - 3.0)); let isMetal = step(3.5, mat) * (1.0 - step(5.5, mat));
   let isEye = 1.0 - step(0.5, abs(mat - 6.0)); let isHair = 1.0 - step(0.5, abs(mat - 7.0));
+  let isLeaf = 1.0 - step(0.5, abs(mat - 8.0)); let isBark = 1.0 - step(0.5, abs(mat - 10.0));
   let p = v.lp;
   // fade micro detail out before it can alias
   let fp = length(fwidth(p)) + 1e-6;
@@ -2370,7 +2398,9 @@ fn vnoise3(p: vec3f) -> f32 {
   let capStr = sin(atan2(p.x, p.z) * 55.0 + vnoise3(p * 35.0) * 3.0) * 0.5 + 0.5;
   let hairH = mix(strands, capStr, step(1.2, p.y));
   let embH = isEmb * step(p.y, 0.72) * step(0.63, p.y) * (1.0 - smoothstep(0.08, 0.16, abs(abs(fract(atan2(p.x, p.z) * 7.0 / 3.14159) - 0.5) * 2.0 + abs((p.y - 0.676) / 0.02) - 0.75)));
-  let h = embH * 0.0008 + isCloth * weave * smoothstep(0.004, 0.0012, fp) * 0.00045
+  let leafy = vnoise3(p * 20.0) * 0.6 + vnoise3(p * 52.0) * 0.4;
+  let grooves = sin(atan2(p.x, p.z) * 15.0 + vnoise3(p * vec3f(3.0, 0.5, 3.0)) * 5.0) * 0.5 + 0.5;
+  let h = isLeaf * leafy * 0.02 + isBark * (grooves * 0.6 + vnoise3(p * 12.0) * 0.4) * 0.025 + embH * 0.0008 + isCloth * weave * smoothstep(0.004, 0.0012, fp) * 0.00045
         + isLeather * grain * smoothstep(0.006, 0.0015, fp) * 0.0006
         + isSkin * pores * smoothstep(0.003, 0.0008, fp) * 0.00012
         + isMetal * brushed * 0.00008
@@ -2399,6 +2429,7 @@ fn vnoise3(p: vec3f) -> f32 {
   let border = step(min(p.x, 0.34 - p.x), 0.012) * step(0.004, min(p.x, 0.34 - p.x));
   base = mix(base, vec3f(0.8, 0.58, 0.22), isCape * max(crest, border));
   if (!ff) { base *= 1.0 - isCape * 0.35; }
+  base *= (1.0 + isLeaf * (leafy - 0.5) * 0.45) * (1.0 - isBark * (1.0 - grooves) * 0.35);
   base *= 1.0 - isCloth * (1.0 - weave) * 0.16 - isLeather * (0.55 - grain) * 0.22 - isHair * (1.0 - hairH) * 0.22;
   // iris fibres + dark limbal ring (only shows on the coloured part of the eye)
   let ir = length(p.xy); let ang = atan2(p.y, p.x);
@@ -2769,8 +2800,8 @@ function frameUniforms() {
   f.set([...SUN, 1.0], 52);
   f.set([1.55, 1.36, 1.1, 0], 56);          // warm sun
   f.set([0.22, 0.48, 0.95, 0], 60);          // sky zenith
-  f.set([0.72, 0.84, 0.95, 0], 64);          // horizon haze
-  f.set([0.0028, 0.05, WORLD.water, state.shrineAwake ? 1 : 0], 68);
+  f.set([0.64, 0.79, 0.95, 0], 64);          // horizon haze
+  f.set([0.0022, 0.05, WORLD.water, state.shrineAwake ? 1 : 0], 68);
   f.set([GR.w, GR.h, 1 / GR.w, 1 / GR.h], 72);
   f.set([WORLD.size, WORLD.n, 0, 1], 76);
   f.set([view[0], view[4], view[8], 0], 80);
