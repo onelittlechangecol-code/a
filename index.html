@@ -2574,13 +2574,31 @@ fn blur(uv: vec2f, dir: vec2f) -> vec4f {
 @fragment fn fsBlurH(v: FOut) -> @location(0) vec4f { return blur(v.uv, vec2f(1.0, 0.0)); }
 @fragment fn fsBlurV(v: FOut) -> @location(0) vec4f { return blur(v.uv, vec2f(0.0, 1.0)); }
 fn aces(x: vec3f) -> vec3f { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), vec3f(0.0), vec3f(1.0)); }
+struct Post { sun: vec4f };
+@group(0) @binding(3) var<uniform> PU: Post;
 @fragment fn fsFinal(v: FOut) -> @location(0) vec4f {
-  var c = textureSample(src, smp, v.uv).rgb + textureSample(bloomTex, smp, v.uv).rgb * 0.6;
+  // slight chromatic fringe toward the frame edges
+  let q = v.uv - 0.5;
+  let ca = q * dot(q, q) * 0.012;
+  var c = vec3f(textureSample(src, smp, v.uv + ca).r, textureSample(src, smp, v.uv).g, textureSample(src, smp, v.uv - ca).b);
+  c += textureSample(bloomTex, smp, v.uv).rgb * 0.6;
+  // god rays: march the bright buffer toward the sun; foliage and terrain carve the shafts
+  let toSun = PU.sun.xy - v.uv;
+  let stp = toSun / 28.0;
+  var ruv = v.uv; var decay = 1.0; var rays = vec3f(0.0);
+  for (var i = 0; i < 28; i++) {
+    ruv += stp;
+    rays += textureSample(bloomTex, smp, ruv).rgb * decay;
+    decay *= 0.93;
+  }
+  let falloff = 1.0 - smoothstep(0.0, 0.9, length(toSun * vec2f(PU.sun.w, 1.0)));
+  c += rays * 0.032 * PU.sun.z * falloff * vec3f(1.0, 0.92, 0.78);
   c *= 0.95;
   c = aces(c);
   let l = dot(c, vec3f(0.2126, 0.7152, 0.0722));
   c = mix(vec3f(l), c, 1.1);
-  let q = v.uv - 0.5;
+  // split toning: cool shadows, warm highlights
+  c *= mix(vec3f(0.94, 0.98, 1.06), vec3f(1.05, 1.0, 0.93), smoothstep(0.05, 0.85, l));
   c *= 1.0 - dot(q, q) * 0.42;
   c = pow(clamp(c, vec3f(0.0), vec3f(1.0)), vec3f(1.0 / 2.2));
   c += (fract(sin(dot(v.pos.xy, vec2f(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0;
@@ -2756,7 +2774,8 @@ function resizeTargets() {
   GR.bgBright = bg(GR.pBright, [{ binding: 0, resource: GR.hdr.createView() }, { binding: 1, resource: GR.linSampler }]);
   GR.bgBlurH = bg(GR.pBlurH, [{ binding: 0, resource: GR.bloomA.createView() }, { binding: 1, resource: GR.linSampler }]);
   GR.bgBlurV = bg(GR.pBlurV, [{ binding: 0, resource: GR.bloomB.createView() }, { binding: 1, resource: GR.linSampler }]);
-  GR.bgFinal = bg(GR.pFinal, [{ binding: 0, resource: GR.hdr.createView() }, { binding: 1, resource: GR.linSampler }, { binding: 2, resource: GR.bloomA.createView() }]);
+  if (!GR.postUB) GR.postUB = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  GR.bgFinal = bg(GR.pFinal, [{ binding: 0, resource: GR.hdr.createView() }, { binding: 1, resource: GR.linSampler }, { binding: 2, resource: GR.bloomA.createView() }, { binding: 3, resource: { buffer: GR.postUB } }]);
 }
 
 // ---------- instance packing ----------
@@ -2836,6 +2855,11 @@ function frameUniforms() {
   c2[0] = Math.round(c2[0] / unit2) * unit2; c2[1] = Math.round(c2[1] / unit2) * unit2;
   f.set(M4.mul(M4.ortho(c2[0] - ext2, c2[0] + ext2, c2[1] - ext2, c2[1] + ext2, -c2[2] - 40, -c2[2] + 40), lv), 88);
   GR.device.queue.writeBuffer(GR.frameUB, 0, f);
+  // sun position on screen for the god-ray pass
+  const sp = V.add(cam.pos, V.mul(SUN, 500));
+  const cx = vp[0] * sp[0] + vp[4] * sp[1] + vp[8] * sp[2] + vp[12], cy = vp[1] * sp[0] + vp[5] * sp[1] + vp[9] * sp[2] + vp[13], cw = vp[3] * sp[0] + vp[7] * sp[1] + vp[11] * sp[2] + vp[15];
+  const vis = cw > 0 ? clamp(V.dot(V.norm(V.sub(cam.target, cam.pos)), SUN) * 2.5, 0, 1) : 0;
+  GR.device.queue.writeBuffer(GR.postUB, 0, new Float32Array([cw > 0 ? cx / cw * 0.5 + 0.5 : 0.5, cw > 0 ? 0.5 - cy / cw * 0.5 : -1, vis, asp]));
 }
 
 function buildDynamic() {
