@@ -2801,10 +2801,26 @@ fn vnoise3(p: vec3f) -> f32 {
   let dia = abs(fract(ea) - 0.5) * 2.0 + abs(ey);
   let emb = isEmb * step(p.y, 1.0) * max(max(1.0 - smoothstep(0.08, 0.16, abs(dia - 0.75)), 1.0 - smoothstep(0.1, 0.2, abs(abs(ey) - 1.45))), step(abs(ey), 1.0) * step(dia, 0.35) * 0.9);
   let hemBand = isEmb * step(p.y, 0.652);
+  // chest: a gold-embroidered yoke dipping to a point, scroll work inside twin rules, and stitched princess seams
+  let onTorso = isEmb * step(0.99, p.y) * step(p.y, 1.37);
+  let yk = p.y - 1.215 + 0.42 * abs(p.x);
+  let yokeRule = 1.0 - smoothstep(0.0012, 0.0024, abs(abs(yk) - 0.012));
+  let sx = p.x * 46.0 + select(0.0, 0.5, p.z < 0.0);
+  let scroll = 1.0 - smoothstep(0.0012, 0.0026, abs(yk - 0.0065 * sin(sx * 6.2832)));
+  let bead = step(length(vec2f((fract(sx) - 0.5) / 46.0, yk)), 0.0028);
+  let yoke = onTorso * step(abs(yk), 0.016) * max(max(yokeRule, scroll * 0.9), bead);
+  let above = onTorso * step(0.016, yk);
+  let seamX = abs(abs(p.x) - 0.072);
+  let seam = onTorso * step(yk, -0.016) * (1.0 - smoothstep(0.0008, 0.0018, seamX));
+  let stitch = onTorso * step(yk, -0.016) * step(abs(seamX - 0.005), 0.0012) * step(fract(p.y * 140.0), 0.55);
   let embAll = clamp(emb + hemBand, 0.0, 1.0);
   var base = v.col.rgb * v.tint.rgb;
   base = mix(base, base * mix(0.6, mix(0.12, 1.15, ringH), mailFade), isMail);
   base = mix(base, vec3f(0.78, 0.55, 0.2), embAll);
+  base = mix(base, base * 0.82, above);
+  base = mix(base, base * 0.55, seam);
+  base = mix(base, vec3f(0.85, 0.72, 0.45), stitch);
+  base = mix(base, vec3f(0.8, 0.57, 0.21), yoke);
   // rune glyphs: stacked angular symbols, only the carved strokes glow
   let gy = fract(p.y * 3.2); let gid = floor(p.y * 3.2); let gx = abs(p.x + p.z) * 5.0;
   let glyph = max(max(step(abs(gy - 0.5), 0.06) * step(gx, 0.7 + 0.2 * sin(gid * 3.1)), step(abs(gx - 0.35 - 0.2 * sin(gid * 1.7)), 0.07) * step(abs(gy - 0.5), 0.35)), step(abs(gy - gx * 0.6 - 0.2), 0.05) * step(gx, 0.8));
