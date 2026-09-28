@@ -958,8 +958,12 @@ function buildHero() {
   const strap = (pts) => { for (let i = 0; i < pts.length - 1; i++) P(tubeMesh(pts[i], pts[i + 1], () => 0.012, () => HC.leather, 8, 2), [BI.chest, BI.spine]); };
   strap([[0.12, 1.33, 0.06], [0.05, 1.24, 0.112], [-0.04, 1.12, 0.113], [-0.12, 1.0, 0.13], [-0.17, 0.96, 0.08]]);
   strap([[0.12, 1.33, -0.07], [0.04, 1.22, -0.104], [-0.06, 1.1, -0.1], [-0.13, 0.98, -0.07]]);
-  // left pauldron
-  P(keepTris(ellipsoid([0.178, 1.336, -0.01], [0.078, 0.052, 0.078], (n0) => n0[1] < -0.05 ? HC.gold : HC.leatherLight, 20, 12), p => p[1] > 1.31), [BI.ua(1), BI.chest]);
+  // left pauldron: overlapping armour lames stepping down the shoulder, thin gold edge, rivets
+  for (let k = 0; k < 3; k++) {
+    const c = [0.182 + k * 0.02, 1.338 - k * 0.036, -0.008], r = [0.08 + k * 0.006, 0.046, 0.08 + k * 0.006], cut = c[1] - 0.004;
+    P(keepTris(ellipsoid(c, r, (n0) => n0[1] < 0.16 ? HC.gold : (k === 0 ? HC.leatherLight : HC.leather), 28, 16), q => q[1] > cut), [BI.ua(1), BI.chest]);
+    for (let j = 0; j < 4; j++) { const a = -0.8 + j * 0.53; P(ellipsoid([c[0] + Math.sin(a) * r[0] * 0.9, c[1] + 0.012, c[2] + Math.cos(a) * r[2] * 0.9], [0.0045, 0.0045, 0.0045], HC.gold, 6, 4), [BI.ua(1)]); }
+  }
   // ---- arms + hands ----
   for (const s of [1, -1]) {
     P(ellipsoid(sd([0.162, 1.312, -0.008], s), [0.066, 0.064, 0.066], HC.tunic, 18, 12), [BI.ua(s), BI.chest]);
@@ -1602,18 +1606,18 @@ function skinHero() {
 }
 
 // ---------- cape: verlet cloth pinned across the shoulders ----------
-const CAPE = { W: 7, H: 11 };
+const CAPE = { W: 7, H: 14 };
 function capeStep(dt, snap, time) {
   const W = CAPE.W, H = CAPE.H, F = rig.F, Rc = F[2].R, cp = F[2].P;
-  const pin = (i) => V.add(cp, R3.v(Rc, [lerp(-0.155, 0.155, i / (W - 1)), 0.13, -0.118]));
+  const pin = (i) => V.add(cp, R3.v(Rc, [lerp(-0.18, 0.18, i / (W - 1)), 0.13 - Math.pow(Math.abs(i / (W - 1) - 0.5) * 2, 2) * 0.02, -0.215]));
   if (snap || !rig.cape) {
     rig.cape = [];
     for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
-      const top = pin(i), off = R3.v(Rc, [lerp(-0.155, 0.155, i / (W - 1)) * (j / (H - 1)) * 0.4, -j * 0.066, -0.012 * j]);
+      const top = pin(i), off = R3.v(Rc, [lerp(-0.18, 0.18, i / (W - 1)) * (j / (H - 1)) * 0.4, -j * 0.066, -0.02 * j]);
       const q = V.add(top, off); rig.cape.push({ p: q, q: q.slice() });
     }
     rig.capeRest = { h: 0.066, w: [] };
-    for (let j = 0; j < H; j++) rig.capeRest.w.push(0.31 / (W - 1) * (1 + 0.4 * j / (H - 1)));
+    for (let j = 0; j < H; j++) rig.capeRest.w.push(0.36 / (W - 1) * (1 + 0.45 * j / (H - 1)));
   }
   const C = rig.cape, g = -9.8 * dt * dt, air = [Math.sin(time * 1.4) * 0.5, 0, Math.cos(time * 1.1) * 0.35];
   const fwd = R3.v(rig.Rfull, [0, 0, 1]);
@@ -1643,6 +1647,9 @@ function capeStep(dt, snap, time) {
       const n = C[k];
       const push = (a, b, r) => { const ab = V.sub(b, a), t = clamp(V.dot(V.sub(n.p, a), ab) / V.dot(ab, ab), 0, 1), c = V.add(a, V.mul(ab, t)), d = V.sub(n.p, c), l = V.len(d); if (l < r && l > 1e-6) n.p = V.add(c, V.mul(d, r / l)); };
       push(torsoA, torsoB, 0.19);
+      // bulge over the shield on the back
+      const sc = V.add(cp, R3.v(Rc, [0.03, -0.05, 0.16])), dsc = V.sub(n.p, sc), lsc = V.len(dsc);
+      if (lsc < 0.39 && lsc > 1e-6) n.p = V.add(sc, V.mul(dsc, 0.39 / lsc));
       for (const [a, b] of thighs) push(a, b, 0.1);
       const gy = heightAt(n.p[0], n.p[2]) + 0.02; if (n.p[1] < gy) n.p[1] = gy;
       // keep the cape behind the hips
@@ -2093,7 +2100,7 @@ const PI = 3.14159265;
 struct Frame {
   viewProj: mat4x4f, invViewProj: mat4x4f, lightVP: mat4x4f,
   camPos: vec4f, sunDir: vec4f, sunCol: vec4f, skyTop: vec4f, skyHor: vec4f,
-  fogP: vec4f, res: vec4f, misc: vec4f, camRight: vec4f, camUp: vec4f,
+  fogP: vec4f, res: vec4f, misc: vec4f, camRight: vec4f, camUp: vec4f, lightVP2: mat4x4f,
 };
 @group(0) @binding(0) var<uniform> F: Frame;
 
@@ -2129,6 +2136,7 @@ const WGSL_SCENE = WGSL_COMMON + /* wgsl */`
 @group(0) @binding(1) var shadowTex: texture_depth_2d;
 @group(0) @binding(2) var shadowSmp: sampler_comparison;
 @group(0) @binding(3) var heightTex: texture_2d<f32>;
+@group(0) @binding(4) var shadowTex2: texture_depth_2d;
 
 fn skyColor(d: vec3f) -> vec3f {
   let t = clamp(d.y, 0.0, 1.0);
@@ -2150,7 +2158,6 @@ fn applyFog(c: vec3f, wp: vec3f) -> vec3f {
 fn shadowAt(wp: vec3f, n: vec3f) -> f32 {
   let p = F.lightVP * vec4f(wp + n * 0.08, 1.0);
   let uv = p.xy * vec2f(0.5, -0.5) + 0.5;
-  if (uv.x < 0.001 || uv.x > 0.999 || uv.y < 0.001 || uv.y > 0.999 || p.z > 1.0) { return 1.0; }
   let tx = 1.0 / 2048.0;
   var s = 0.0;
   for (var x = -1; x <= 1; x++) {
@@ -2159,7 +2166,20 @@ fn shadowAt(wp: vec3f, n: vec3f) -> f32 {
     }
   }
   let edge = smoothstep(0.0, 0.08, min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y)));
-  return mix(1.0, s / 9.0, edge);
+  var s1 = mix(1.0, s / 9.0, edge);
+  if (uv.x < 0.001 || uv.x > 0.999 || uv.y < 0.001 || uv.y > 0.999 || p.z > 1.0) { s1 = 1.0; }
+  let q = F.lightVP2 * vec4f(wp + n * 0.012, 1.0);
+  let uv2 = q.xy * vec2f(0.5, -0.5) + 0.5;
+  let t2 = 1.0 / 1024.0;
+  var s2 = 0.0;
+  for (var x = -2; x <= 2; x++) {
+    for (var y = -2; y <= 2; y++) {
+      s2 += textureSampleCompareLevel(shadowTex2, shadowSmp, uv2 + vec2f(f32(x), f32(y)) * t2 * 0.8, q.z - 0.0006);
+    }
+  }
+  s2 /= 25.0;
+  let w2 = smoothstep(0.0, 0.12, min(min(uv2.x, 1.0 - uv2.x), min(uv2.y, 1.0 - uv2.y))) * step(q.z, 1.0) * step(0.0, q.z);
+  return mix(s1, min(s1 + 0.25, s2), w2);
 }
 fn ggx(n: vec3f, v: vec3f, l: vec3f, rough: f32) -> f32 {
   let h = normalize(v + l); let nh = max(dot(n, h), 0.0);
@@ -2325,6 +2345,16 @@ fn vnoise3(p: vec3f) -> f32 {
   let embAll = clamp(emb + hemBand, 0.0, 1.0);
   var base = v.col.rgb * v.tint.rgb;
   base = mix(base, vec3f(0.78, 0.55, 0.2), embAll);
+  // cape: embroidered sun crest, gold side borders, darker lining on the inner face
+  let isCape = isCloth * step(0.35, p.z) * step(p.z, 0.45);
+  let cq = vec2f(p.x - 0.17, p.y + 0.3);
+  let cr = length(cq); let ca = atan2(cq.y, cq.x);
+  let scallop = step(abs(cr - 0.075 - 0.01 * cos(ca * 12.0)), 0.006);
+  let spokes = step(cr, 0.03 + 0.024 * pow(abs(cos(ca * 6.0)), 6.0));
+  let crest = max(max(step(abs(cr - 0.062), 0.004), spokes), scallop);
+  let border = step(min(p.x, 0.34 - p.x), 0.012) * step(0.004, min(p.x, 0.34 - p.x));
+  base = mix(base, vec3f(0.8, 0.58, 0.22), isCape * max(crest, border));
+  if (!ff) { base *= 1.0 - isCape * 0.35; }
   base *= 1.0 - isCloth * (1.0 - weave) * 0.16 - isLeather * (0.55 - grain) * 0.22 - isHair * (1.0 - hairH) * 0.22;
   // iris fibres + dark limbal ring (only shows on the coloured part of the eye)
   let ir = length(p.xy); let ang = atan2(p.y, p.x);
@@ -2409,6 +2439,8 @@ struct LOut { @builtin(position) pos: vec4f, @location(0) col: vec4f };
 const WGSL_SHADOW = WGSL_COMMON + /* wgsl */`
 @vertex fn vsShadowMesh(i: VIn) -> @builtin(position) vec4f { return F.lightVP * vec4f(meshWorld(i), 1.0); }
 @vertex fn vsShadowTerrain(@location(0) pos: vec3f) -> @builtin(position) vec4f { return F.lightVP * vec4f(pos, 1.0); }
+@vertex fn vsShadowMesh2(i: VIn) -> @builtin(position) vec4f { return F.lightVP2 * vec4f(meshWorld(i), 1.0); }
+@vertex fn vsShadowTerrain2(@location(0) pos: vec3f) -> @builtin(position) vec4f { return F.lightVP2 * vec4f(pos, 1.0); }
 `;
 
 const WGSL_POST = /* wgsl */`
@@ -2456,7 +2488,7 @@ fn aces(x: vec3f) -> vec3f { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 *
 `;
 
 const GR = {}; // renderer state
-const FRAME_FLOATS = 88;
+const FRAME_FLOATS = 104;
 const INST_FLOATS = 24;
 
 async function initRenderer(meshes) {
@@ -2528,6 +2560,9 @@ async function initRenderer(meshes) {
   device.queue.writeTexture({ texture: GR.heightTex }, WORLD.H, { bytesPerRow: N1 * 4 }, [N1, N1]);
   GR.shadowTex = device.createTexture({ size: [2048, 2048], format: 'depth32float', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
   GR.shadowView = GR.shadowTex.createView();
+  // second, tight cascade around the hero for crisp self-shadowing (hair on face, cape, folds)
+  GR.shadowTex2 = device.createTexture({ size: [1024, 1024], format: 'depth32float', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+  GR.shadowView2 = GR.shadowTex2.createView();
   GR.cmpSampler = device.createSampler({ compare: 'less', magFilter: 'linear', minFilter: 'linear' });
   GR.linSampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
 
@@ -2538,11 +2573,12 @@ async function initRenderer(meshes) {
     { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'depth' } },
     { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'comparison' } },
     { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+    { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'depth' } },
   ] });
   GR.shadowBGL = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: VF, buffer: { type: 'uniform' } }] });
   GR.sceneBG = device.createBindGroup({ layout: GR.sceneBGL, entries: [
     { binding: 0, resource: { buffer: GR.frameUB } }, { binding: 1, resource: GR.shadowView },
-    { binding: 2, resource: GR.cmpSampler }, { binding: 3, resource: GR.heightTex.createView() },
+    { binding: 2, resource: GR.cmpSampler }, { binding: 3, resource: GR.heightTex.createView() }, { binding: 4, resource: GR.shadowView2 },
   ] });
   GR.shadowBG = device.createBindGroup({ layout: GR.shadowBGL, entries: [{ binding: 0, resource: { buffer: GR.frameUB } }] });
   const scenePL = device.createPipelineLayout({ bindGroupLayouts: [GR.sceneBGL] });
@@ -2588,6 +2624,12 @@ async function initRenderer(meshes) {
   GR.psMesh = SP('vsShadowMesh', [vA, vI]);
   GR.psTerrain = SP('vsShadowTerrain', [vA]);
   GR.psHero = SP('vsShadowTerrain', [vH]);
+  const SP2 = (vs, buffers) => device.createRenderPipeline({
+    layout: shadowPL, vertex: { module: shadowMod, entryPoint: vs, buffers },
+    primitive: { topology: 'triangle-list', cullMode: 'none' },
+    depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'less', depthBias: 1, depthBiasSlopeScale: 1.5 },
+  });
+  GR.psMesh2 = SP2('vsShadowMesh2', [vA, vI]); GR.psTerrain2 = SP2('vsShadowTerrain2', [vA]); GR.psHero2 = SP2('vsShadowTerrain2', [vH]);
   const PP = (fs, fmt) => device.createRenderPipeline({ layout: 'auto', vertex: { module: postMod, entryPoint: 'vsFull' }, fragment: { module: postMod, entryPoint: fs, targets: [{ format: fmt }] }, primitive: { topology: 'triangle-list' } });
   GR.pBright = PP('fsBright', HDR); GR.pBlurH = PP('fsBlurH', HDR); GR.pBlurV = PP('fsBlurV', HDR); GR.pFinal = PP('fsFinal', format);
   resizeTargets();
@@ -2689,6 +2731,9 @@ function frameUniforms() {
   f.set([WORLD.size, WORLD.n, 0, 1], 76);
   f.set([view[0], view[4], view[8], 0], 80);
   f.set([view[1], view[5], view[9], 0], 84);
+  const c2 = M4.apply(lv, V.add(player.pos, [0, 1.0, 0])), ext2 = 3.4, unit2 = ext2 * 2 / 1024;
+  c2[0] = Math.round(c2[0] / unit2) * unit2; c2[1] = Math.round(c2[1] / unit2) * unit2;
+  f.set(M4.mul(M4.ortho(c2[0] - ext2, c2[0] + ext2, c2[1] - ext2, c2[1] + ext2, -c2[2] - 40, -c2[2] + 40), lv), 88);
   GR.device.queue.writeBuffer(GR.frameUB, 0, f);
 }
 
@@ -2859,6 +2904,21 @@ function render() {
     drawGroups(pass, GR.dynGroups, GR.dynIB);
     if (heroVisible) {
       pass.setPipeline(GR.psHero);
+      pass.setVertexBuffer(0, GR.heroVB); pass.setIndexBuffer(GR.heroIB, 'uint32'); pass.drawIndexed(GR.heroCount);
+      pass.setVertexBuffer(0, GR.capeVB); pass.setIndexBuffer(GR.capeIB, 'uint32'); pass.drawIndexed(GR.capeCount);
+    }
+    pass.end();
+  }
+  // --- fine cascade around the hero ---
+  {
+    const pass = enc.beginRenderPass({ colorAttachments: [], depthStencilAttachment: { view: GR.shadowView2, depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'store' } });
+    pass.setBindGroup(0, GR.shadowBG);
+    pass.setPipeline(GR.psTerrain2); pass.setVertexBuffer(0, GR.terrVB); pass.setIndexBuffer(GR.terrIB, 'uint32'); pass.drawIndexed(GR.terrCount);
+    pass.setPipeline(GR.psMesh2); pass.setVertexBuffer(0, GR.meshVB); pass.setIndexBuffer(GR.meshIB, 'uint32');
+    drawGroups(pass, GR.staticGroups.filter(g => !GR.shadowSkip.has(g.mesh)), GR.staticIB);
+    drawGroups(pass, GR.dynGroups, GR.dynIB);
+    if (heroVisible) {
+      pass.setPipeline(GR.psHero2);
       pass.setVertexBuffer(0, GR.heroVB); pass.setIndexBuffer(GR.heroIB, 'uint32'); pass.drawIndexed(GR.heroCount);
       pass.setVertexBuffer(0, GR.capeVB); pass.setIndexBuffer(GR.capeIB, 'uint32'); pass.drawIndexed(GR.capeCount);
     }
