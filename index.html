@@ -912,16 +912,17 @@ function buildHero() {
   P(transformed(torusMesh(0.064, 0.02, 28, 8, HC.trim), at(0, 1.35, -0.004)), [BI.chest, BI.neck]);
   // tunic skirt: blended between pelvis and the thighs so it flares with each stride
   {
-    const m = new Mesh(), seg = 32, rings = 7;
+    const m = new Mesh(), seg = 64, rings = 9;
     for (let k = 0; k <= rings; k++) {
       const t = k / rings, y = lerp(0.975, 0.64, t), rx = lerp(0.142, 0.205, t), rz = lerp(0.106, 0.16, t);
       for (let j = 0; j <= seg; j++) {
         const a = j / seg * TAU, x = Math.sin(a) * rx, z = Math.cos(a) * rz;
-        const hem = t > 0.84, wave = Math.sin(a * 6) * 0.006 * t;
+        const hem = t > 0.84, wave = Math.sin(a * 16) * 0.05 * t * t + Math.sin(a * 5 + 1) * 0.02 * t;
         m.v([x * (1 + wave), y, z * (1 + wave)], V.norm([Math.sin(a), 0.35, Math.cos(a)]), hem ? HC.trim : (j % 8 === 0 && t > 0.3 ? HC.tunicDark : HC.tunic));
       }
     }
     for (let k = 0; k < rings; k++) for (let j = 0; j < seg; j++) { const a = k * (seg + 1) + j, b = a + seg + 1; m.tri(a, b, a + 1); m.tri(a + 1, b, b + 1); }
+    m.recomputeNormals();
     P(m, null, (p) => {
       const t = clamp((0.975 - p[1]) / 0.335, 0, 1), s = smooth(-0.07, 0.07, p[0]), k = 0.8 * t * t;
       return [[BI.pelvis, 1 - k], [BI.thigh(1), k * s], [BI.thigh(-1), k * (1 - s)]];
@@ -941,7 +942,7 @@ function buildHero() {
   for (const s of [1, -1]) {
     P(ellipsoid(sd([0.162, 1.312, -0.008], s), [0.066, 0.064, 0.066], HC.tunic, 18, 12), [BI.ua(s), BI.chest]);
     const sh = sd(HB.sh, s), el = sd(HB.el, s), wr = sd(HB.wr, s), ha = sd(HB.ha, s);
-    P(tubeMesh(sh, el, t => lerp(0.052, 0.042, t) + Math.sin(t * Math.PI) * 0.004, () => HC.shirt, 18, 8), [BI.ua(s), BI.chest, BI.fa(s)]);
+    P(tubeMesh(sh, el, t => lerp(0.052, 0.042, t) + Math.sin(t * Math.PI) * 0.004 + Math.sin(t * 38) * 0.0022 * smooth(0.4, 0.95, t), (t) => t > 0.9 ? HC.trim : HC.shirt, 22, 24), [BI.ua(s), BI.chest, BI.fa(s)]);
     P(tubeMesh(el, wr, t => t < 0.3 ? lerp(0.041, 0.037, t / 0.3) : lerp(0.045, 0.036, (t - 0.3) / 0.7), (t) => t < 0.28 ? HC.skin : (t < 0.36 || t > 0.93 ? HC.leatherLight : HC.leather), 18, 12), [BI.fa(s), BI.ua(s), BI.hand(s)]);
     // hand in its own frame: y toward fingertips, fingers curl inward
     const y = V.norm(V.sub(ha, wr)), z = V.norm(V.sub([0, 0, 1], V.mul(y, y[2]))), x = V.cross(y, z);
@@ -960,9 +961,14 @@ function buildHero() {
   // ---- legs + boots ----
   for (const s of [1, -1]) {
     const hp = sd(HB.hp, s), kn = sd(HB.kn, s), an = sd(HB.an, s);
-    P(tubeMesh(hp, kn, t => lerp(0.08, 0.056, t) + Math.sin(t * Math.PI) * 0.006, () => HC.pants, 20, 10), [BI.thigh(s), BI.pelvis, BI.shin(s)]);
+    P(tubeMesh(hp, kn, t => lerp(0.08, 0.056, t) + Math.sin(t * Math.PI) * 0.006 + Math.sin(t * 34) * 0.002 * smooth(0.6, 1, t), () => HC.pants, 22, 22), [BI.thigh(s), BI.pelvis, BI.shin(s)]);
     P(tubeMesh(kn, an, t => t < 0.34 ? lerp(0.055, 0.05, t / 0.34) : (t < 0.44 ? 0.064 : lerp(0.058, 0.046, (t - 0.44) / 0.56)),
       (t) => t < 0.34 ? HC.pants : (t < 0.44 ? HC.leatherLight : HC.leather), 20, 14), [BI.shin(s), BI.thigh(s), BI.foot(s)]);
+    for (const tt of [0.6, 0.8]) {
+      const c = V.lerp(kn, an, tt), r = lerp(0.058, 0.046, (tt - 0.44) / 0.56) + 0.004;
+      P(transformed(torusMesh(r, 0.006, 26, 6, HC.leatherDark), at(c[0], c[1], c[2])), [BI.shin(s)]);
+      P(ellipsoid(V.add(c, [s * r, 0, 0.01]), [0.006, 0.012, 0.01], HC.gold, 10, 6), [BI.shin(s)]);
+    }
     P(ellipsoid([0.1 * s, 0.052, 0.05], [0.05, 0.052, 0.108], (n0, q) => q[1] < -0.03 ? HC.sole : (n0[2] > 0.8 ? HC.leatherDark : HC.leather), 20, 14,
       (q) => { if (q[1] < 0) q[1] *= 0.72; if (q[2] > 0) q[1] *= 1 - 0.3 * (q[2] / 0.108); return q; }), [BI.foot(s), BI.shin(s)]);
   }
@@ -983,21 +989,22 @@ function buildHero() {
     }
   }
   const nv = mesh.vcount;
-  const out = new Float32Array(nv * 10);
-  for (let k = 0; k < nv; k++) out.set([mesh.c[k * 4], mesh.c[k * 4 + 1], mesh.c[k * 4 + 2], mesh.c[k * 4 + 3]], k * 10 + 6);
+  const out = new Float32Array(nv * 13);
+  for (let k = 0; k < nv; k++) out.set([mesh.c[k * 4], mesh.c[k * 4 + 1], mesh.c[k * 4 + 2], mesh.c[k * 4 + 3], mesh.p[k * 3], mesh.p[k * 3 + 1], mesh.p[k * 3 + 2]], k * 13 + 6);
   return { mesh, bi: new Uint8Array(bi), bw: new Float32Array(bw), out, idx: new Uint32Array(mesh.i), nv };
 }
 
 // accessory meshes (drawn as instances attached to bones)
 function buildHeroProps(M) {
-  // hair strand: tapered, curved lock
+  // hair lock: a flat ribbon that tapers, bends outward and twists slightly
   {
-    const c = new Mesh(), seg = 8, rings = 7;
+    const c = new Mesh(), seg = 10, rings = 10;
     for (let r = 0; r <= rings; r++) {
-      const t = r / rings, rad = 0.5 * Math.pow(1 - t, 0.55) + 0.03, bend = t * t * 0.4;
+      const t = r / rings, w = 0.5 * (1 - Math.pow(t, 1.7)) + 0.03, th = w * 0.24 + 0.01, bend = t * t * 0.42, tw = t * 0.5;
       for (let s = 0; s <= seg; s++) {
-        const a = s / seg * TAU;
-        c.v([Math.sin(a) * rad, t, Math.cos(a) * rad * 0.55 - bend], V.norm([Math.sin(a), 0.2, Math.cos(a)]), V.lerp(HC.hairDark, HC.hair, 0.25 + t * 0.55).concat([7]));
+        const a = s / seg * TAU, x0 = Math.cos(a) * w, z0 = Math.sin(a) * th;
+        const x = x0 * Math.cos(tw) - z0 * Math.sin(tw), z = x0 * Math.sin(tw) + z0 * Math.cos(tw);
+        c.v([x, t, z - bend], [0, 0, 1], V.lerp(HC.hairDark, HC.hair, 0.3 + t * 0.5 + 0.1 * Math.cos(a)).concat([7]));
       }
     }
     for (let r = 0; r < rings; r++) for (let s = 0; s < seg; s++) { const a = r * (seg + 1) + s, b = a + seg + 1; c.tri(a, b, a + 1); c.tri(a + 1, b, b + 1); }
@@ -1054,11 +1061,26 @@ function buildHeroProps(M) {
 // hair locks laid out in bind space: base point, direction, length, width
 const LOCKS = (() => {
   const L = [], hc = HB.headC;
-  for (let k = 0; k < 8; k++) { const x = -0.084 + k * 0.024; L.push({ b: [x, 1.648 - Math.abs(x) * 0.3, 0.098], d: [x * 3.2 + 0.35, -1, 0.75], len: 0.07 + (k % 3) * 0.012, w: 0.046, sway: 0.6 }); }
-  for (let k = 0; k < 6; k++) { const x = -0.06 + k * 0.024; L.push({ b: [x, 1.668, 0.03 - Math.abs(x) * 0.2], d: [x * 1.6, 0.12, -1], len: 0.13, w: 0.05, sway: 0.8 }); }
-  for (const s of [1, -1]) for (let k = 0; k < 3; k++) L.push({ b: [0.108 * s, 1.59 - k * 0.012, 0.055 - k * 0.05], d: [0.35 * s, -1, 0.18 - k * 0.12], len: 0.12 + k * 0.02, w: 0.038, sway: 0.7 });
-  for (let k = 0; k < 7; k++) { const x = -0.075 + k * 0.025; L.push({ b: [x, 1.61, -0.118], d: [x * 1.3, -1, -0.35], len: 0.14 + (k % 3) * 0.02, w: 0.048, sway: 0.9 }); }
-  for (let k = 0; k < 3; k++) L.push({ b: [(k - 1) * 0.018, 1.565, -0.13], d: [(k - 1) * 0.4, -0.75, -1], len: 0.2, w: 0.05, sway: 1.6, tail: true });
+  let sd0 = 3; const r = () => { sd0 = (sd0 * 16807) % 2147483647; return sd0 / 2147483647; };
+  // fringe: two layers swept to one side
+  for (let layer = 0; layer < 2; layer++) for (let k = 0; k < 9; k++) {
+    const x = -0.088 + k * 0.022 + layer * 0.011;
+    L.push({ b: [x, 1.652 - Math.abs(x) * 0.3 + layer * 0.006, 0.096 - layer * 0.008], d: [x * 3 + 0.38 + (r() - 0.5) * 0.2, -1, 0.7], len: 0.068 + r() * 0.03 - layer * 0.01, w: 0.05, sway: 0.6 });
+  }
+  // crown: layered locks sweeping back
+  for (let row = 0; row < 3; row++) for (let k = 0; k < 7; k++) {
+    const x = -0.072 + k * 0.024;
+    L.push({ b: [x, 1.672 - row * 0.012, 0.045 - row * 0.05 - Math.abs(x) * 0.2], d: [x * 1.5 + (r() - 0.5) * 0.25, 0.1 - row * 0.35, -1], len: 0.12 + r() * 0.04, w: 0.06, sway: 0.8 });
+  }
+  // sides framing the face, ears poke through
+  for (const s of [1, -1]) for (let k = 0; k < 4; k++) L.push({ b: [0.106 * s, 1.598 - k * 0.01, 0.07 - k * 0.045], d: [0.3 * s, -1, 0.22 - k * 0.1], len: 0.11 + k * 0.02 + r() * 0.02, w: 0.05, sway: 0.7 });
+  // back layers down to the nape
+  for (let row = 0; row < 2; row++) for (let k = 0; k < 8; k++) {
+    const x = -0.084 + k * 0.024;
+    L.push({ b: [x, 1.62 - row * 0.04, -0.116 - row * 0.012], d: [x * 1.2, -1, -0.3 - row * 0.1], len: 0.13 + r() * 0.04, w: 0.058, sway: 0.9 });
+  }
+  // short tail tied at the back
+  for (let k = 0; k < 4; k++) L.push({ b: [(k - 1.5) * 0.014, 1.56, -0.13], d: [(k - 1.5) * 0.35, -0.8, -1], len: 0.2 + r() * 0.04, w: 0.055, sway: 1.6, tail: true });
   for (const l of L) { l.d = V.norm(l.d); l.out = V.norm(V.sub(l.b, hc)); }
   return L;
 })();
@@ -1510,7 +1532,7 @@ function skinHero() {
       x += w * (M[0] * px + M[3] * py + M[6] * pz + t[0]); y += w * (M[1] * px + M[4] * py + M[7] * pz + t[1]); z += w * (M[2] * px + M[5] * py + M[8] * pz + t[2]);
       a += w * (M[0] * nx + M[3] * ny + M[6] * nz); b += w * (M[1] * nx + M[4] * ny + M[7] * nz); c += w * (M[2] * nx + M[5] * ny + M[8] * nz);
     }
-    const l = Math.hypot(a, b, c) || 1, o = v * 10;
+    const l = Math.hypot(a, b, c) || 1, o = v * 13;
     out[o] = x; out[o + 1] = y; out[o + 2] = z; out[o + 3] = a / l; out[o + 4] = b / l; out[o + 5] = c / l;
   }
 }
@@ -1572,7 +1594,7 @@ function buildCapeVerts(out) {
     const l = C[j * W + Math.max(0, i - 1)].p, r = C[j * W + Math.min(W - 1, i + 1)].p, u = C[Math.max(0, j - 1) * W + i].p, d = C[Math.min(H - 1, j + 1) * W + i].p;
     const n = V.norm(V.cross(V.sub(r, l), V.sub(d, u)));
     const col = j >= H - 1 ? HC.trim : (i === 0 || i === W - 1 ? HC.capeIn : HC.cape);
-    out.set([p[0], p[1], p[2], n[0], n[1], n[2], col[0], col[1], col[2], col[3]], k * 10);
+    out.set([p[0], p[1], p[2], n[0], n[1], n[2], col[0], col[1], col[2], col[3], i / (W - 1) * 0.34, -j * 0.066, 0.4], k * 13);
   }
 }
 
@@ -2085,7 +2107,7 @@ fn ggx(n: vec3f, v: vec3f, l: vec3f, rough: f32) -> f32 {
   return D * G / (4.0 * nv + 0.001);
 }
 // material ids (vertex colour alpha): 1 skin, 2 cloth, 3 leather, 4 steel, 5 gold, 6 eye, 7 hair, 8 foliage
-fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, mat: f32) -> vec3f {
+fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, mat: f32, tng: vec3f) -> vec3f {
   var rough = roughIn; var metal = 0.0; var sss = 0.0; var sheen = 0.0;
   let m = i32(mat + 0.5);
   if (m == 1) { rough = 0.48; sss = 1.0; }
@@ -2112,7 +2134,18 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
     let back = pow(clamp(dot(v, -l), 0.0, 1.0), 4.0) * pow(1.0 - nv, 2.0);
     c += base * vec3f(1.0, 0.5, 0.32) * back * sss * 0.6 * F.sunCol.rgb;
   }
-  c += F.sunCol.rgb * ggx(n, v, l, rough) * sh * F.sunDir.w * fres * (1.0 - rough * 0.4);
+  if (m == 7) {
+    // Kajiya-Kay: two shifted lobes along the strand direction (white primary, tinted secondary)
+    let t0 = normalize(tng - n * dot(tng, n));
+    let hv = normalize(l + v);
+    let t1 = normalize(t0 + n * 0.12); let t2 = normalize(t0 - n * 0.18);
+    let d1 = dot(t1, hv); let d2 = dot(t2, hv);
+    let s1 = pow(sqrt(max(1.0 - d1 * d1, 0.0)), 90.0); let s2 = pow(sqrt(max(1.0 - d2 * d2, 0.0)), 22.0);
+    let lit = smoothstep(-0.1, 0.3, nl) * sh * F.sunDir.w;
+    c += F.sunCol.rgb * (s1 * 0.45 + s2 * base * 0.9) * lit;
+  } else {
+    c += F.sunCol.rgb * ggx(n, v, l, rough) * sh * F.sunDir.w * fres * (1.0 - rough * 0.4);
+  }
   let env = skyColor(reflect(-v, n));
   c += env * fres * mix(0.3 * (1.0 - rough), 0.85, metal);
   c += sheen * pow(1.0 - nv, 4.0) * base * (F.skyHor.rgb * 0.9 + F.sunCol.rgb * 0.3);
@@ -2157,7 +2190,7 @@ struct TOut { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1
   var base = v.col * (0.84 + 0.28 * d1) * (0.94 + 0.12 * d2);
   base *= 1.0 - smoothstep(0.35, -0.15, v.wp.y) * 0.35;
   let sh = shadowAt(v.wp, n);
-  var c = lighting(base, n, v.wp, 0.93, 0.0, sh, 0.0);
+  var c = lighting(base, n, v.wp, 0.93, 0.0, sh, 0.0, vec3f(0.0, 1.0, 0.0));
   return vec4f(applyFog(c, v.wp), 1.0);
 }
 
@@ -2165,19 +2198,68 @@ struct TOut { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1
 struct VOut {
   @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1) n: vec3f, @location(2) col: vec4f,
   @location(3) @interpolate(flat) tint: vec4f, @location(4) @interpolate(flat) prm: vec4f,
+  @location(5) lp: vec3f, @location(6) tng: vec3f,
 };
 @vertex fn vsMesh(i: VIn) -> VOut {
   let wp = meshWorld(i);
   let s2 = vec3f(dot(i.m0.xyz, i.m0.xyz), dot(i.m1.xyz, i.m1.xyz), dot(i.m2.xyz, i.m2.xyz));
   let n = normalize(mat3x3f(i.m0.xyz, i.m1.xyz, i.m2.xyz) * (i.nrm / max(s2, vec3f(1e-10))));
-  var o: VOut; o.pos = F.viewProj * vec4f(wp, 1.0); o.wp = wp; o.n = n; o.col = i.col; o.tint = i.tint; o.prm = i.prm; return o;
+  var o: VOut; o.pos = F.viewProj * vec4f(wp, 1.0); o.wp = wp; o.n = n; o.col = i.col; o.tint = i.tint; o.prm = i.prm;
+  o.lp = i.pos; o.tng = normalize(i.m1.xyz); return o;
+}
+// skinned hero + cloth: world-space vertices plus their bind-space position for stable surface detail
+struct HIn { @location(0) pos: vec3f, @location(1) nrm: vec3f, @location(2) col: vec4f, @location(9) bind: vec3f };
+@vertex fn vsHero(i: HIn) -> VOut {
+  var o: VOut; o.pos = F.viewProj * vec4f(i.pos, 1.0); o.wp = i.pos; o.n = i.nrm; o.col = i.col;
+  o.tint = vec4f(1.0, 1.0, 1.0, 0.0); o.prm = vec4f(0.6, 0.35, 0.0, 0.0); o.lp = i.bind; o.tng = vec3f(0.0, -1.0, 0.0); return o;
+}
+fn hash3(p: vec3f) -> f32 { return fract(sin(dot(p, vec3f(127.1, 311.7, 74.7))) * 43758.5453); }
+fn vnoise3(p: vec3f) -> f32 {
+  let i = floor(p); let f = fract(p); let u = f * f * (3.0 - 2.0 * f);
+  let a = mix(mix(hash3(i), hash3(i + vec3f(1.0, 0.0, 0.0)), u.x), mix(hash3(i + vec3f(0.0, 1.0, 0.0)), hash3(i + vec3f(1.0, 1.0, 0.0)), u.x), u.y);
+  let b = mix(mix(hash3(i + vec3f(0.0, 0.0, 1.0)), hash3(i + vec3f(1.0, 0.0, 1.0)), u.x), mix(hash3(i + vec3f(0.0, 1.0, 1.0)), hash3(i + vec3f(1.0, 1.0, 1.0)), u.x), u.y);
+  return mix(a, b, u.z);
 }
 @fragment fn fsMesh(v: VOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f {
   var n = normalize(v.n);
   if (!ff) { n = -n; }
-  let base = v.col.rgb * v.tint.rgb;
+  let mat = v.col.a;
+  let isSkin = 1.0 - step(0.5, abs(mat - 1.0)); let isCloth = 1.0 - step(0.5, abs(mat - 2.0));
+  let isLeather = 1.0 - step(0.5, abs(mat - 3.0)); let isMetal = step(3.5, mat) * (1.0 - step(5.5, mat));
+  let isEye = 1.0 - step(0.5, abs(mat - 6.0)); let isHair = 1.0 - step(0.5, abs(mat - 7.0));
+  let p = v.lp;
+  // fade micro detail out before it can alias
+  let fp = length(fwidth(p)) + 1e-6;
+  // fabric: over-under weave plus slubby threads
+  let wx = sin(p.x * 1500.0 + sin(p.y * 90.0) * 0.6); let wy = sin(p.y * 1500.0);
+  let weave = (wx * 0.5 + 0.5) * (wy * 0.5 + 0.5) + vnoise3(p * 420.0) * 0.35;
+  // leather: pebbled grain and soft creases
+  let grain = vnoise3(p * 320.0) * 0.6 + vnoise3(p * 900.0) * 0.4 - smoothstep(0.62, 0.7, vnoise3(p * 60.0)) * 0.6;
+  // skin: fine pores; metal: brushed along the blade; hair: strand striations
+  let pores = vnoise3(p * 1100.0);
+  let brushed = vnoise3(vec3f(p.x * 900.0, p.y * 18.0, p.z * 900.0));
+  let strands = sin(p.x * 260.0 + vnoise3(p * 40.0) * 5.0) * 0.5 + 0.5;
+  let capStr = sin(atan2(p.x, p.z) * 55.0 + vnoise3(p * 35.0) * 3.0) * 0.5 + 0.5;
+  let hairH = mix(strands, capStr, step(1.2, p.y));
+  let h = isCloth * weave * smoothstep(0.004, 0.0012, fp) * 0.00045
+        + isLeather * grain * smoothstep(0.006, 0.0015, fp) * 0.0006
+        + isSkin * pores * smoothstep(0.003, 0.0008, fp) * 0.00012
+        + isMetal * brushed * 0.00008
+        + isHair * hairH * smoothstep(0.012, 0.003, fp) * 0.0004;
+  // bump from a height field using screen-space derivatives (no tangents needed)
+  let dhx = dpdx(h); let dhy = dpdy(h); let px = dpdx(v.wp); let py = dpdy(v.wp);
+  let r1 = cross(py, n); let r2 = cross(n, px); let det = dot(px, r1);
+  let grad = sign(det) * (dhx * r1 + dhy * r2);
+  n = normalize(abs(det) * n - grad);
+  var base = v.col.rgb * v.tint.rgb;
+  base *= 1.0 - isCloth * (1.0 - weave) * 0.16 - isLeather * (0.55 - grain) * 0.22 - isHair * (1.0 - hairH) * 0.22;
+  // iris fibres + dark limbal ring (only shows on the coloured part of the eye)
+  let ir = length(p.xy); let ang = atan2(p.y, p.x);
+  let fib = 0.8 + 0.2 * sin(ang * 46.0 + vnoise3(p * 9.0) * 6.0) - smoothstep(0.75, 1.0, ir) * 0.35 + smoothstep(0.35, 0.0, ir) * 0.2;
+  let colored = clamp((1.0 - dot(base, vec3f(0.33))) * 1.4, 0.0, 1.0);
+  base *= mix(1.0, fib, isEye * colored);
   let sh = shadowAt(v.wp, n);
-  var c = lighting(base, n, v.wp, v.prm.x, v.prm.y, sh, v.col.a);
+  var c = lighting(base, n, v.wp, v.prm.x, v.prm.y, sh, mat, normalize(v.tng));
   c += base * v.tint.a;
   return vec4f(applyFog(c, v.wp), 1.0);
 }
@@ -2350,7 +2432,7 @@ async function initRenderer(meshes) {
   GR.waterIB = mk(new Uint32Array([0, 2, 1, 0, 3, 2]), U.INDEX);
   // skinned hero body, cloth cape and sword trail (dynamic)
   GR.heroVB = empty(HERO.out.byteLength, U.VERTEX); GR.heroIB = mk(HERO.idx, U.INDEX); GR.heroCount = HERO.idx.length;
-  GR.capeData = new Float32Array(CAPE.W * CAPE.H * 10);
+  GR.capeData = new Float32Array(CAPE.W * CAPE.H * 13);
   const cidx = []; for (let j = 0; j < CAPE.H - 1; j++) for (let i = 0; i < CAPE.W - 1; i++) { const a = j * CAPE.W + i; cidx.push(a, a + 1, a + CAPE.W, a + 1, a + CAPE.W + 1, a + CAPE.W); }
   GR.capeVB = empty(GR.capeData.byteLength, U.VERTEX); GR.capeIB = mk(new Uint32Array(cidx), U.INDEX); GR.capeCount = cidx.length;
   GR.trailData = new Float32Array(16 * 6 * 7);
@@ -2401,6 +2483,7 @@ async function initRenderer(meshes) {
   }
 
   const vA = { arrayStride: 40, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' }, { shaderLocation: 2, offset: 24, format: 'float32x4' }] };
+  const vH = { arrayStride: 52, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' }, { shaderLocation: 2, offset: 24, format: 'float32x4' }, { shaderLocation: 9, offset: 40, format: 'float32x3' }] };
   const vI = { arrayStride: INST_FLOATS * 4, stepMode: 'instance', attributes: [0, 1, 2, 3, 4, 5].map(k => ({ shaderLocation: 3 + k, offset: k * 16, format: 'float32x4' })) };
   const vP = { arrayStride: 32, stepMode: 'instance', attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x4' }, { shaderLocation: 1, offset: 16, format: 'float32x4' }] };
   const vL = { arrayStride: 28, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x4' }] };
@@ -2419,6 +2502,7 @@ async function initRenderer(meshes) {
   GR.pSky = P('vsFull', 'fsSky', [], { depth: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'always' } });
   GR.pTerrain = P('vsTerrain', 'fsTerrain', [vA], { cull: 'none' });
   GR.pMesh = P('vsMesh', 'fsMesh', [vA, vI]);
+  GR.pHero = P('vsHero', 'fsMesh', [vH]);
   GR.pWater = P('vsWater', 'fsWater', [vA], { blend: premul, depth: depthRO });
   GR.pPart = P('vsPart', 'fsPart', [vP], { blend: premul, depth: depthRO });
   GR.pTrail = P('vsLine', 'fsTrail', [vL], { blend: premul, depth: depthRO });
@@ -2430,6 +2514,7 @@ async function initRenderer(meshes) {
   });
   GR.psMesh = SP('vsShadowMesh', [vA, vI]);
   GR.psTerrain = SP('vsShadowTerrain', [vA]);
+  GR.psHero = SP('vsShadowTerrain', [vH]);
   const PP = (fs, fmt) => device.createRenderPipeline({ layout: 'auto', vertex: { module: postMod, entryPoint: 'vsFull' }, fragment: { module: postMod, entryPoint: fs, targets: [{ format: fmt }] }, primitive: { topology: 'triangle-list' } });
   GR.pBright = PP('fsBright', HDR); GR.pBlurH = PP('fsBlurH', HDR); GR.pBlurV = PP('fsBlurV', HDR); GR.pFinal = PP('fsFinal', format);
   resizeTargets();
@@ -2700,7 +2785,7 @@ function render() {
     drawGroups(pass, GR.staticGroups.filter(g => !GR.shadowSkip.has(g.mesh)), GR.staticIB);
     drawGroups(pass, GR.dynGroups, GR.dynIB);
     if (heroVisible) {
-      pass.setVertexBuffer(1, GR.identIB);
+      pass.setPipeline(GR.psHero);
       pass.setVertexBuffer(0, GR.heroVB); pass.setIndexBuffer(GR.heroIB, 'uint32'); pass.drawIndexed(GR.heroCount);
       pass.setVertexBuffer(0, GR.capeVB); pass.setIndexBuffer(GR.capeIB, 'uint32'); pass.drawIndexed(GR.capeCount);
     }
@@ -2719,7 +2804,7 @@ function render() {
     drawGroups(pass, GR.staticGroups, GR.staticIB);
     drawGroups(pass, GR.dynGroups, GR.dynIB);
     if (heroVisible) {
-      pass.setVertexBuffer(1, GR.identIB);
+      pass.setPipeline(GR.pHero);
       pass.setVertexBuffer(0, GR.heroVB); pass.setIndexBuffer(GR.heroIB, 'uint32'); pass.drawIndexed(GR.heroCount);
       pass.setVertexBuffer(0, GR.capeVB); pass.setIndexBuffer(GR.capeIB, 'uint32'); pass.drawIndexed(GR.capeCount);
     }
