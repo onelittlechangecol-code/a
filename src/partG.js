@@ -347,7 +347,6 @@ function render() {
     });
     pass.setBindGroup(0, GR.sceneBGR);
     if (Q.refl) {
-    pass.setPipeline(GR.pSkyR); pass.draw(3);
     pass.setPipeline(GR.pTerrainR); pass.setVertexBuffer(0, GR.terrVB); pass.setIndexBuffer(GR.terrIB, 'uint32'); pass.drawIndexed(GR.terrCount);
     pass.setPipeline(GR.pMeshR); pass.setVertexBuffer(0, GR.meshVB); pass.setIndexBuffer(GR.meshIB, 'uint32');
     drawGroups(pass, GR.shadowGroups, GR.staticIB, 'lo');
@@ -357,6 +356,7 @@ function render() {
       pass.setVertexBuffer(0, GR.heroVB); pass.setVertexBuffer(1, GR.heroWB); pass.setIndexBuffer(GR.heroIB, 'uint32'); pass.drawIndexed(GR.heroCount);
       pass.setVertexBuffer(0, GR.capeVB); pass.setVertexBuffer(1, GR.capeWB); pass.setIndexBuffer(GR.capeIB, 'uint32'); pass.drawIndexed(GR.capeCount);
     }
+    pass.setPipeline(GR.pSkyR); pass.draw(3);
     }
     pass.end();
   }
@@ -367,7 +367,6 @@ function render() {
       depthStencilAttachment: { view: GR.msDepth.createView(), depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'discard' },
     });
     pass.setBindGroup(0, GR.sceneBG);
-    pass.setPipeline(GR.pSky); pass.draw(3);
     pass.setPipeline(GR.pTerrain); pass.setVertexBuffer(0, GR.terrVB); pass.setIndexBuffer(GR.terrIB, 'uint32'); pass.drawIndexed(GR.terrCount);
     pass.setPipeline(GR.pMesh); pass.setVertexBuffer(0, GR.meshVB); pass.setIndexBuffer(GR.meshIB, 'uint32');
     drawGroups(pass, Q.grass ? GR.staticGroups : GR.shadowGroups, GR.staticIB, 'view');
@@ -377,6 +376,7 @@ function render() {
       pass.setVertexBuffer(0, GR.heroVB); pass.setVertexBuffer(1, GR.heroWB); pass.setIndexBuffer(GR.heroIB, 'uint32'); pass.drawIndexed(GR.heroCount);
       pass.setVertexBuffer(0, GR.capeVB); pass.setVertexBuffer(1, GR.capeWB); pass.setIndexBuffer(GR.capeIB, 'uint32'); pass.drawIndexed(GR.capeCount);
     }
+    pass.setPipeline(GR.pSky); pass.draw(3);
     pass.setPipeline(GR.pWater); pass.setVertexBuffer(0, GR.waterVB); pass.setIndexBuffer(GR.waterIB, 'uint32'); pass.drawIndexed(6);
     if (heroVisible && GR.trailCount) { pass.setPipeline(GR.pTrail); pass.setVertexBuffer(0, GR.trailVB); pass.draw(GR.trailCount); }
     if (GR.partCount) { pass.setPipeline(GR.pPart); pass.setVertexBuffer(0, GR.partVB); pass.draw(6, GR.partCount); }

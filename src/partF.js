@@ -206,6 +206,10 @@ struct FOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
   let p = vec2f(f32((i << 1u) & 2u), f32(i & 2u));
   var o: FOut; o.pos = vec4f(p * 2.0 - 1.0, 0.0, 1.0); o.uv = vec2f(p.x, 1.0 - p.y); return o;
 }
+@vertex fn vsSky(@builtin(vertex_index) i: u32) -> FOut {
+  let p = vec2f(f32((i << 1u) & 2u), f32(i & 2u));
+  var o: FOut; o.pos = vec4f(p * 2.0 - 1.0, 1.0, 1.0); o.uv = vec2f(p.x, 1.0 - p.y); return o;
+}
 @fragment fn fsSky(v: FOut) -> @location(0) vec4f {
   let ndc = vec2f(v.uv.x * 2.0 - 1.0, 1.0 - v.uv.y * 2.0);
   let a = F.invViewProj * vec4f(ndc, 1.0, 1.0);
@@ -277,7 +281,7 @@ struct TOut { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1
 @vertex fn vsTerrain(i: TIn) -> TOut {
   var o: TOut; o.pos = F.viewProj * vec4f(i.pos, 1.0); o.wp = i.pos; o.n = i.nrm; o.col = i.col.rgb; return o;
 }
-@fragment fn fsTerrain(v: TOut) -> @location(0) vec4f {
+fn shadeTerrain(v: TOut, clipR: bool) -> vec4f {
   var n = normalize(v.n);
   let d1 = fbm(v.wp.xz * 0.45);
   let d2 = vnoise(v.wp.xz * 3.1);
@@ -346,7 +350,7 @@ struct TOut { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1
     let pf = 0.04 + 0.96 * pow(1.0 - max(dot(n, vdir), 0.0), 5.0);
     c = mix(c, skyColor(reflect(-vdir, n)) * 0.55, pud * pf * 0.6 / (1.0 + distance(v.wp, F.camPos.xyz) * 0.02));
   }
-  if (F.misc.z > 0.5 && v.wp.y < F.fogP.z - 0.05) { discard; }
+  if (clipR && v.wp.y < F.fogP.z - 0.05) { return vec4f(-1.0); }
   return vec4f(applyFog(c, v.wp), 1.0);
 }
 
@@ -395,7 +399,11 @@ fn vnoise3(p: vec3f) -> f32 {
   let b = mix(mix(hash3(i + vec3f(0.0, 0.0, 1.0)), hash3(i + vec3f(1.0, 0.0, 1.0)), u.x), mix(hash3(i + vec3f(0.0, 1.0, 1.0)), hash3(i + vec3f(1.0, 1.0, 1.0)), u.x), u.y);
   return mix(a, b, u.z);
 }
-@fragment fn fsMesh(v: VOut, @builtin(front_facing) ffRaw: bool) -> @location(0) vec4f {
+@fragment fn fsTerrain(v: TOut) -> @location(0) vec4f { return shadeTerrain(v, false); }
+@fragment fn fsTerrainR(v: TOut) -> @location(0) vec4f { let c = shadeTerrain(v, true); if (c.a < 0.0) { discard; } return c; }
+@fragment fn fsMesh(v: VOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f { return shadeMesh(v, ff, false); }
+@fragment fn fsMeshR(v: VOut, @builtin(front_facing) ff: bool) -> @location(0) vec4f { let c = shadeMesh(v, ff, true); if (c.a < 0.0) { discard; } return c; }
+fn shadeMesh(v: VOut, ffRaw: bool, clipR: bool) -> vec4f {
   // the mirrored reflection pass flips winding
   let ff = select(ffRaw, !ffRaw, F.misc.z > 0.5);
   var n = normalize(v.n);
@@ -535,7 +543,7 @@ fn vnoise3(p: vec3f) -> f32 {
   let sh = shadowAt(v.wp + normalize(v.n) * 0.12 * (isLeaf + isBlade), n);
   var c = lighting(base, n, v.wp, v.prm.x, v.prm.y, sh, mat, normalize(v.tng));
   c += base * v.tint.a;
-  if (F.misc.z > 0.5 && v.wp.y < F.fogP.z - 0.05) { discard; }
+  if (clipR && v.wp.y < F.fogP.z - 0.05) { return vec4f(-1.0); }
   return vec4f(applyFog(c, v.wp), 1.0);
 }
 
@@ -870,15 +878,15 @@ async function initRenderer(meshes) {
     depthStencil: extra.depth || depthOn,
     multisample: extra.ms1 ? { count: 1 } : MS,
   });
-  GR.pSky = P('vsFull', 'fsSky', [], { depth: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'always' } });
+  GR.pSky = P('vsSky', 'fsSky', [], { depth: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less-equal' } });
   GR.pTerrain = P('vsTerrain', 'fsTerrain', [vA], { cull: 'none' });
   GR.pMesh = P('vsMesh', 'fsMesh', [vA, vI]);
   GR.pHero = P('vsHero', 'fsMesh', [vH, vHW]);
   // single-sample variants for the half-res mirrored reflection pass
-  GR.pSkyR = P('vsFull', 'fsSky', [], { ms1: true, depth: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'always' } });
-  GR.pTerrainR = P('vsTerrain', 'fsTerrain', [vA], { ms1: true });
-  GR.pMeshR = P('vsMesh', 'fsMesh', [vA, vI], { ms1: true });
-  GR.pHeroR = P('vsHero', 'fsMesh', [vH, vHW], { ms1: true });
+  GR.pSkyR = P('vsSky', 'fsSky', [], { ms1: true, depth: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'less-equal' } });
+  GR.pTerrainR = P('vsTerrain', 'fsTerrainR', [vA], { ms1: true });
+  GR.pMeshR = P('vsMesh', 'fsMeshR', [vA, vI], { ms1: true });
+  GR.pHeroR = P('vsHero', 'fsMeshR', [vH, vHW], { ms1: true });
   GR.pWater = P('vsWater', 'fsWater', [vA], { blend: premul, depth: depthRO });
   GR.pPart = P('vsPart', 'fsPart', [vP], { blend: premul, depth: depthRO });
   GR.pTrail = P('vsLine', 'fsTrail', [vL], { blend: premul, depth: depthRO });
