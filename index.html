@@ -1117,10 +1117,14 @@ function buildHero() {
   }
   // ---- torso ----
   P(ellipsoid([0, 1.19, -0.006], [0.158, 0.19, 0.112], (n0) => {
-    if (n0[2] > 0.55 && n0[1] > 0.5 && Math.abs(n0[0]) < 0.28 - (n0[1] - 0.5) * 0.3) return HC.shirt;
-    if (n0[2] > 0.5 && n0[1] > 0.42 && Math.abs(n0[0]) < 0.34 - (n0[1] - 0.42) * 0.3) return HC.trim;
+    // V-neck shirt opening: linen recessed behind a gold-trimmed edge, shaded toward the point, with a soft fold
+    const vIn = Math.abs(n0[0]) < (n0[1] - 0.42) * 0.9, vRim = Math.abs(n0[0]) < (n0[1] - 0.36) * 0.9 + 0.05;
+    if (n0[2] > 0.5 && n0[1] > 0.44 && vIn) { const k = 0.78 + 0.22 * smooth(0.44, 0.8, n0[1]) - 0.06 * Math.cos(n0[0] * 40); return V.mul(HC.shirt, k).concat([2]); }
+    if (n0[2] > 0.45 && n0[1] > 0.36 && vRim) return HC.trim;
     return V.lerp(HC.tunicDark, HC.tunic, smooth(-0.9, 0.3, n0[1])).concat([9]);
-  }, 40, 30, (q, n0) => {
+  }, 96, 72, (q, n0) => {
+    if (n0[2] > 0.5 && n0[1] > 0.44 && Math.abs(n0[0]) < (n0[1] - 0.42) * 0.9) q = V.sub(q, V.mul(n0, 0.006));
+    else if (n0[2] > 0.45 && n0[1] > 0.36 && Math.abs(n0[0]) < (n0[1] - 0.36) * 0.9 + 0.05) q = V.add(q, V.mul(n0, 0.002));
     // V-taper: broad across the shoulders, narrowing to the waist; flatter front with a hint of pectorals, flat back
     q[0] *= 1 + 0.13 * smooth(-0.1, 0.65, n0[1]) - 0.1 * smooth(0.0, -0.8, n0[1]);
     if (n0[2] > 0) { q[2] *= 0.9; q[2] += 0.007 * G(Math.abs(n0[0]), n0[1], 0.42, 0.35, 0.25, 0.2) * n0[2]; } else q[2] *= 0.84;
