@@ -3085,6 +3085,10 @@ struct VOut {
     let gust = 0.5 + 0.5 * sin(dot(wp.xz, vec2f(0.21, 0.13)) - tw * 1.3);
     let sway = (sin(tw * 2.1 + wp.x * 0.7 + wp.z * 0.5) * 0.6 + gust * 0.9) * i.pos.y * i.pos.y * 0.12;
     wp += vec3f(sway, -abs(sway) * 0.25, sway * 0.45);
+    // blades part around the hero and flatten underfoot
+    let dh = wp.xz - vec2f(F.camRight.w, F.camUp.w); let dl = length(dh);
+    let push = smoothstep(1.1, 0.25, dl) * i.pos.y;
+    wp += vec3f(dh.x / max(dl, 0.05) * push * 0.35, -push * 0.3, dh.y / max(dl, 0.05) * push * 0.35);
   } else if (mid == 8) {
     let roll = sin(tw * 0.8 + wp.x * 0.15 + wp.z * 0.11) * 0.025 * max(i.pos.y + 0.5, 0.0);
     wp += vec3f(roll, 0.0, roll * 0.6);
@@ -3652,8 +3656,8 @@ function frameUniforms() {
   f.set([0.0022, 0.05, WORLD.water, state.shrineAwake ? 1 : 0], 68);
   f.set([GR.w, GR.h, 1 / GR.w, 1 / GR.h], 72);
   f.set([WORLD.size, WORLD.n, 0, 1], 76);
-  f.set([view[0], view[4], view[8], 0], 80);
-  f.set([view[1], view[5], view[9], 0], 84);
+  f.set([view[0], view[4], view[8], player.pos[0]], 80);   // .w: hero x (grass push)
+  f.set([view[1], view[5], view[9], player.pos[2]], 84);   // .w: hero z
   const c2 = M4.apply(lv, V.add(player.pos, [0, 1.0, 0])), ext2 = 3.4, unit2 = ext2 * 2 / 1024;
   c2[0] = Math.round(c2[0] / unit2) * unit2; c2[1] = Math.round(c2[1] / unit2) * unit2;
   if (QUALITY[state.quality].fine) f.set(M4.mul(M4.ortho(c2[0] - ext2, c2[0] + ext2, c2[1] - ext2, c2[1] + ext2, -c2[2] - 40, -c2[2] + 40), lv), 88);
