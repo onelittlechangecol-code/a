@@ -1867,6 +1867,14 @@ const LOCKS = (() => {
     const dir = [Math.sin(a) * 0.8, -0.35 - 0.2 * Math.max(0, Math.cos(a)), Math.cos(a) * 0.8 - 0.2];
     L.push({ b: V.add(cw, [Math.sin(a) * 0.012, 0, Math.cos(a) * 0.012]), d: dir, len: 0.11 + r() * 0.04, w: 0.05, sway: 0.5 });
   }
+  // flyaways: thin loose strands scattered over the crown, sides and nape that break up the silhouette
+  for (let k = 0; k < 44; k++) {
+    const a = r() * Math.PI * 2, el = 0.35 + r() * 0.9, cr = [Math.sin(a) * Math.sin(el), Math.cos(el), Math.cos(a) * Math.sin(el)];
+    if (cr[2] > 0.55 && cr[1] < 0.75) continue;   // keep the face clear
+    const b = V.add(hc, [cr[0] * 0.118, cr[1] * 0.138 + 0.006, cr[2] * 0.128 - 0.004]);
+    const d = [cr[0] * 0.9 + (r() - 0.5) * 0.4, -0.7 - r() * 0.4, cr[2] * 0.9 - 0.25];
+    L.push({ b, d, len: 0.1 + r() * 0.09, w: 0.011 + r() * 0.006, sway: 1.1 });
+  }
   // short tail tied at the nape
   for (let k = 0; k < 5; k++) L.push({ b: [(k - 2) * 0.008, 1.525, -0.128], d: [(k - 2) * 0.1, -1, -0.35], len: 0.15 + r() * 0.035, w: 0.036, sway: 1.4, tail: true });
   for (const l of L) { l.d = V.norm(l.d); l.out = V.norm(V.sub(l.b, hc)); l.b = V.sub(l.b, V.mul(l.out, 0.0025)); l.tone = 0.86 + r() * 0.26; }
