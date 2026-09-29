@@ -35,7 +35,7 @@ Objetivo: recoge chispas para despertar el santuario de la colina y cruza su por
 **Jugabilidad**
 - Aceleración distinta en suelo y aire, coyote time, buffer de salto, salto variable y cuelgue en el punto más alto.
 - Doble salto, planeo, voltereta de esquiva con invulnerabilidad, dash aéreo, estocada con onda expansiva, combo de 3 golpes y ataque giratorio cargado.
-- Goblins articulados con garrote: deambulan, persiguen y atacan; aguantan dos golpes, se tambalean con destello, y al caer salen girando y desaparecen en humo.
+- Goblins articulados con piel curtida y moteada, brazos y piernas musculosos y garrote con aro de hierro: deambulan, persiguen y atacan; aguantan dos golpes, se tambalean con destello, y al caer salen girando y desaparecen en humo.
 - Hitstop, chispas, sacudida de cámara, cambio de FOV y vibración del mando.
 
 **Mundo y render**

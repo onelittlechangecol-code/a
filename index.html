@@ -1605,14 +1605,17 @@ function buildHeroProps(M) {
 
 // ---------- goblin foe ("Gruñón"): articulated parts, each an instance ----------
 function buildGoblin(M) {
+  const warts = (n, zones, seed) => { const m = new Mesh(); let sd = seed; const r = () => { sd = (sd * 16807) % 2147483647; return sd / 2147483647; };
+    for (let k = 0; k < n; k++) { const z = zones[k % zones.length]; const p = [z[0] + (r() - 0.5) * z[3], z[1] + (r() - 0.5) * z[3], z[2] + (r() - 0.5) * z[3] * 0.5]; const s = 0.008 + r() * 0.012; m.merge(ellipsoid(p, [s, s * 0.8, s], mc('#7e3129', 1), 6, 4)); }
+    return m; };
   const G = {
-    skin: mc('#a3443a', 1), skinDark: mc('#6e2a24', 1), belly: mc('#c78370', 1), leather: mc('#5a3a22', 3), rope: mc('#b8955a', 2),
+    skin: mc('#a3443a', 3), skinDark: mc('#6e2a24', 3), belly: mc('#c78370', 3), leather: mc('#5a3a22', 3), rope: mc('#b8955a', 2),
     wood: mc('#7a4a26', 3), woodDark: mc('#4d2d16', 3), bone: mc('#efe3c4', 3), nail: mc('#3a2a24', 3), pupil: mc('#1a0c08', 6),
   };
   // torso: pot belly, loincloth, rope belt, a few warts
   {
     const b = new Mesh();
-    b.merge(ellipsoid([0, 0.56, 0], [0.27, 0.28, 0.25], (n0) => V.lerp(G.skin, G.belly, smooth(0.2, 0.8, n0[2]) * smooth(0.6, -0.2, n0[1]) * 0.9).concat([1]), 28, 20,
+    b.merge(ellipsoid([0, 0.56, 0], [0.27, 0.28, 0.25], (n0) => V.lerp(G.skin, G.belly, smooth(0.2, 0.8, n0[2]) * smooth(0.6, -0.2, n0[1]) * 0.9).concat([3]), 28, 20,
       (q, n0) => { if (n0[2] > 0 && n0[1] < 0.3) q[2] *= 1.12; if (n0[1] > 0.6) q[0] *= 1.08; return q; }));
     b.merge(tubeMesh([0, 0.44, 0], [0, 0.18, 0.01], t => lerp(0.24, 0.3, t), (t, a) => (Math.sin(a * 7) > 0.6 ? G.leather : V.mul(G.leather, 1.2).concat([3])), 26, 5, [false, false]));
     b.merge(transformed(torusMesh(1, 0.08, 34, 6, G.rope), M4.scale(at(0, 0.45, 0), 0.25, 0.25, 0.235)));
@@ -1665,8 +1668,8 @@ function buildGoblin(M) {
   // arm (left, unit pivot at shoulder), right arm carries the club
   const arm = (club) => {
     const a = new Mesh(), s = club ? -1 : 1;
-    a.merge(tubeMesh([0, 0, 0], [0.06 * s, -0.22, 0.04], t => lerp(0.07, 0.058, t), () => G.skin, 14, 5));
-    a.merge(tubeMesh([0.06 * s, -0.22, 0.04], [0.08 * s, -0.4, 0.14], t => lerp(0.058, 0.05, t), () => G.skin, 14, 5));
+    a.merge(tubeMesh([0, 0, 0], [0.06 * s, -0.22, 0.04], t => lerp(0.07, 0.056, t) + 0.016 * Math.sin(t * Math.PI) ** 1.5, () => G.skin, 18, 10));   // bulging biceps
+    a.merge(tubeMesh([0.06 * s, -0.22, 0.04], [0.08 * s, -0.4, 0.14], t => lerp(0.058, 0.046, t) + 0.013 * Math.sin(Math.min(1, t * 1.4) * Math.PI), () => G.skin, 18, 10));   // forearm
     a.merge(ellipsoid([0.085 * s, -0.45, 0.16], [0.07, 0.065, 0.07], G.skin, 14, 10));
     for (let k = 0; k < 3; k++) a.merge(ellipsoid([(0.06 + k * 0.025) * s, -0.5, 0.2], [0.012, 0.012, 0.02], G.nail, 6, 4));
     a.merge(ellipsoid([0.02 * s, -0.12, 0.0], [0.05, 0.04, 0.05], G.leather, 10, 6));   // bracer knot
@@ -1674,8 +1677,9 @@ function buildGoblin(M) {
       const c0 = [0.085 * s, -0.47, 0.12], dir = V.norm([0, 0.55, 1]);
       a.merge(tubeMesh(V.sub(c0, V.mul(dir, 0.08)), V.add(c0, V.mul(dir, 0.42)), t => lerp(0.024, 0.036, t), () => G.wood, 10, 4));
       const hc = V.add(c0, V.mul(dir, 0.56));
-      a.merge(ellipsoid(hc, [0.075, 0.075, 0.075], (n0) => V.mul(G.wood, 0.85 + 0.2 * hash2(Math.floor(n0[0] * 5), Math.floor(n0[1] * 5))).concat([3]), 16, 12, (q) => V.add(q, V.mul(dir, q[1] * 0))));
-      a.merge(tubeMesh(V.add(c0, V.mul(dir, 0.42)), V.add(c0, V.mul(dir, 0.66)), t => 0.06 + Math.sin(t * Math.PI) * 0.025, () => G.woodDark, 14, 4));
+      a.merge(ellipsoid(hc, [0.075, 0.075, 0.075], (n0) => V.mul(G.wood, 0.85 + 0.2 * hash2(Math.floor(n0[0] * 5), Math.floor(n0[1] * 5))).concat([3]), 16, 12));
+      a.merge(tubeMesh(V.add(c0, V.mul(dir, 0.42)), V.add(c0, V.mul(dir, 0.66)), t => 0.06 + Math.sin(t * Math.PI) * 0.025, () => G.woodDark, 16, 6));
+      for (const tt of [0.46]) { const cc = V.add(c0, V.mul(dir, tt)); a.merge(transformed(torusMesh(0.066, 0.007, 20, 6, mc('#4a4a50', 4)), basisY(cc, dir))); }   // iron bands
       for (let k = 0; k < 7; k++) {
         const a2 = k / 7 * TAU, rd = V.norm(V.add(V.mul(V.cross(dir, [1, 0, 0]), Math.cos(a2)), V.mul([1, 0, 0], Math.sin(a2))));
         a.merge(cylMesh(6, 0.014, 0.0, 0.07, G.bone, false), basisY(V.add(hc, V.mul(rd, 0.07)), rd));
@@ -1686,11 +1690,21 @@ function buildGoblin(M) {
   M.gobArmL = arm(false); M.gobArmR = arm(true);
   {
     const l = new Mesh();
-    l.merge(tubeMesh([0, 0, 0], [0, -0.3, 0.02], t => lerp(0.085, 0.065, t), () => G.skin, 14, 5));
+    l.merge(tubeMesh([0, 0, 0], [0, -0.3, 0.02], t => lerp(0.085, 0.062, t) + 0.014 * Math.sin(Math.min(1, t * 1.6) * Math.PI), () => G.skin, 18, 10));
     l.merge(ellipsoid([0, -0.34, 0.06], [0.075, 0.05, 0.11], G.skinDark, 14, 10, (q) => { if (q[1] < 0) q[1] *= 0.6; return q; }));
     for (let k = 0; k < 3; k++) l.merge(ellipsoid([(k - 1) * 0.03, -0.355, 0.16], [0.014, 0.012, 0.02], G.nail, 6, 4));
     l.merge(transformed(torusMesh(0.07, 0.012, 16, 6, G.rope), at(0, -0.24, 0.015)));
     M.gobLeg = l;
+  }
+  // mottled, blotchy hide on every skin vertex: darker patches, lighter knuckles of pigment
+  for (const k of ['gobBody', 'gobHead', 'gobArmL', 'gobArmR', 'gobLeg']) {
+    const m = M[k];
+    for (let v = 0; v < m.vcount; v++) {
+      if (Math.round(m.c[v * 4 + 3]) !== 3 || m.c[v * 4] < m.c[v * 4 + 1] * 1.6) continue;
+      const x = m.p[v * 3] * 14, y = m.p[v * 3 + 1] * 14, z = m.p[v * 3 + 2] * 14;
+      const f = 0.7 + 0.5 * noise3(x, y, z) + 0.12 * noise3(x * 4, y * 4, z * 4);
+      for (let c = 0; c < 3; c++) m.c[v * 4 + c] *= f;
+    }
   }
 }
 
