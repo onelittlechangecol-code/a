@@ -3163,9 +3163,9 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
     // character key light: soft, warm, from above and to one side of the camera, so faces keep their modelling
     let up = vec3f(0.0, 1.0, 0.0); let rt = normalize(cross(up, v));
     let kd = normalize(v * 0.3 + up * 0.6 - rt * 0.85);
-    let kw = clamp((dot(n, kd) + 0.4) / 1.4, 0.0, 1.0);
+    let kw = smoothstep(-0.75, 1.0, dot(n, kd));
     c += base * vec3f(1.0, 0.9, 0.78) * kw * 0.45 * F.sunDir.w;
-    c -= base * amb * 0.2 * (1.0 - kw);
+    c -= base * amb * 0.12 * (1.0 - kw);
     c += vec3f(1.0, 0.92, 0.82) * ggx(n, v, kd, max(rough, 0.3)) * 0.02 * F.sunDir.w;
   }
   if (m == 1) {
