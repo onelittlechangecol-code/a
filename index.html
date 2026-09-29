@@ -1857,8 +1857,16 @@ function buildGoblin(M) {
     const a = new Mesh(), s = club ? -1 : 1;
     a.merge(tubeMesh([0, 0, 0], [0.06 * s, -0.22, 0.04], t => lerp(0.07, 0.056, t) + 0.016 * Math.sin(t * Math.PI) ** 1.5, () => G.skin, 18, 10));   // bulging biceps
     a.merge(tubeMesh([0.06 * s, -0.22, 0.04], [0.08 * s, -0.4, 0.14], t => lerp(0.058, 0.046, t) + 0.013 * Math.sin(Math.min(1, t * 1.4) * Math.PI), () => G.skin, 18, 10));   // forearm
-    a.merge(ellipsoid([0.085 * s, -0.45, 0.16], [0.07, 0.065, 0.07], G.skin, 14, 10));
-    for (let k = 0; k < 3; k++) a.merge(ellipsoid([(0.06 + k * 0.025) * s, -0.5, 0.2], [0.012, 0.012, 0.02], G.nail, 6, 4));
+    // knuckly fist: blocky palm, four thick curled fingers ending in black claws, and a thumb
+    a.merge(ellipsoid([0.085 * s, -0.45, 0.16], [0.058, 0.06, 0.055], G.skin, 14, 10, (q) => { q[1] *= q[1] < 0 ? 0.85 : 1; return q; }));
+    for (let k = 0; k < 4; k++) {
+      const x = (0.05 + k * 0.024) * s, k0 = [x, -0.47, 0.205], k1 = [x, -0.51, 0.215], k2 = [x, -0.52, 0.18];
+      a.merge(ellipsoid(k0, [0.016, 0.015, 0.016], G.skin, 8, 6));
+      a.merge(tubeMesh(k0, k1, () => 0.014, () => G.skin, 8, 1)); a.merge(tubeMesh(k1, k2, () => 0.012, () => G.skin, 8, 1));
+      a.merge(cylMesh(6, 0.009, 0.0, 0.022, G.nail, false), basisY(k2, [0, 0.2, -1]));
+    }
+    a.merge(tubeMesh([0.045 * s, -0.43, 0.19], [0.03 * s, -0.47, 0.225], () => 0.015, () => G.skin, 8, 1));
+    a.merge(cylMesh(6, 0.009, 0.0, 0.02, G.nail, false), basisY([0.03 * s, -0.47, 0.225], [-0.3 * s, -0.5, 0.8]));
     a.merge(ellipsoid([0.02 * s, -0.12, 0.0], [0.05, 0.04, 0.05], G.leather, 10, 6));   // bracer knot
     if (club) {
       const c0 = [0.085 * s, -0.47, 0.12], dir = V.norm([0, 0.55, 1]);
@@ -1886,7 +1894,11 @@ function buildGoblin(M) {
     const l = new Mesh();
     l.merge(tubeMesh([0, 0, 0], [0, -0.3, 0.02], t => lerp(0.085, 0.062, t) + 0.014 * Math.sin(Math.min(1, t * 1.6) * Math.PI), () => G.skin, 18, 10));
     l.merge(ellipsoid([0, -0.34, 0.06], [0.075, 0.05, 0.11], G.skinDark, 14, 10, (q) => { if (q[1] < 0) q[1] *= 0.6; return q; }));
-    for (let k = 0; k < 3; k++) l.merge(ellipsoid([(k - 1) * 0.03, -0.355, 0.16], [0.014, 0.012, 0.02], G.nail, 6, 4));
+    for (let k = 0; k < 3; k++) {
+      const x = (k - 1) * 0.034, t0 = [x, -0.35, 0.12], t1 = [x * 1.1, -0.36, 0.175];
+      l.merge(tubeMesh(t0, t1, () => 0.02, () => G.skinDark, 8, 1));
+      l.merge(cylMesh(6, 0.012, 0.0, 0.03, G.nail, false), basisY(t1, [0, -0.25, 1]));
+    }
     l.merge(transformed(torusMesh(0.07, 0.012, 16, 6, G.rope), at(0, -0.24, 0.015)));
     M.gobLeg = l;
   }
