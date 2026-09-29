@@ -1864,11 +1864,18 @@ function buildGoblin(M) {
       a.merge(tubeMesh(V.sub(c0, V.mul(dir, 0.08)), V.add(c0, V.mul(dir, 0.42)), t => lerp(0.024, 0.036, t), () => G.wood, 10, 4));
       const hc = V.add(c0, V.mul(dir, 0.56));
       a.merge(ellipsoid(hc, [0.075, 0.075, 0.075], (n0) => V.mul(G.wood, 0.85 + 0.2 * hash2(Math.floor(n0[0] * 5), Math.floor(n0[1] * 5))).concat([3]), 16, 12));
-      a.merge(tubeMesh(V.add(c0, V.mul(dir, 0.42)), V.add(c0, V.mul(dir, 0.66)), t => 0.06 + Math.sin(t * Math.PI) * 0.025, () => G.woodDark, 16, 6));
+      // knotty club head: lumpy swelling log with lengthwise grain and dark knots
+      { const hm = tubeMesh(V.add(c0, V.mul(dir, 0.42)), V.add(c0, V.mul(dir, 0.68)), t => 0.058 + Math.sin(t * Math.PI) * 0.028, (t, an) => {
+          const grain = 0.8 + 0.25 * Math.sin(an * 9 + Math.sin(t * 7) * 2), knot = Math.abs(Math.sin(an * 3 + 1) * Math.sin(t * 9)) > 0.93 ? 0.55 : 1;
+          return V.mul(G.wood, grain * knot).concat([3]); }, 22, 12);
+        const cc = V.add(c0, V.mul(dir, 0.55));
+        for (let k = 0; k < hm.vcount; k++) { const p = [hm.p[k * 3], hm.p[k * 3 + 1], hm.p[k * 3 + 2]], d0 = V.sub(p, cc), f = 1 + 0.18 * noise3(p[0] * 30, p[1] * 30, p[2] * 30) - 0.09;
+          const q = V.add(cc, V.add(V.mul(dir, V.dot(d0, dir)), V.mul(V.sub(d0, V.mul(dir, V.dot(d0, dir))), f))); hm.p[k * 3] = q[0]; hm.p[k * 3 + 1] = q[1]; hm.p[k * 3 + 2] = q[2]; }
+        hm.recomputeNormals(); a.merge(hm); }
       for (const tt of [0.46]) { const cc = V.add(c0, V.mul(dir, tt)); a.merge(transformed(torusMesh(0.066, 0.007, 20, 6, mc('#4a4a50', 4)), basisY(cc, dir))); }   // iron bands
       for (let k = 0; k < 7; k++) {
         const a2 = k / 7 * TAU, rd = V.norm(V.add(V.mul(V.cross(dir, [1, 0, 0]), Math.cos(a2)), V.mul([1, 0, 0], Math.sin(a2))));
-        a.merge(cylMesh(6, 0.014, 0.0, 0.07, G.bone, false), basisY(V.add(hc, V.mul(rd, 0.07)), rd));
+        a.merge(cylMesh(6, 0.011, 0.0, 0.06, mc('#3a3a40', 4), false), basisY(V.add(hc, V.mul(rd, 0.075)), rd));
       }
     }
     return a;
