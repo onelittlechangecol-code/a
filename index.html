@@ -1301,10 +1301,10 @@ function buildHero() {
   for (const s of [1, -1]) {
     const sh = sd(HB.sh, s), el = sd(HB.el, s), wr = sd(HB.wr, s), ha = sd(HB.ha, s);
     // short tunic sleeve: a deltoid-shaped cap flowing into a flared sleeve with soft folds and a gold-trimmed hem
-    P(ellipsoid(sd([0.15, 1.322, -0.008], s), [0.058, 0.046, 0.06], HC.tunic, 20, 12, (q) => { if (q[1] < 0) q[1] *= 0.6; return q; }), [BI.ua(s), BI.chest]);
+    P(ellipsoid(sd([0.15, 1.326, -0.008], s), [0.054, 0.04, 0.058], HC.tunic, 20, 12, (q) => { if (q[1] < 0) q[1] *= 0.5; return q; }), [BI.ua(s), BI.chest]);
     {
       const A = sd([0.158, 1.345, -0.009], s), B = V.lerp(sh, el, 0.36);
-      P(wrinkle(tubeMesh(A, B, t => lerp(0.06, 0.058, t) + 0.006 * smooth(0.6, 1, t), (t) => t > 0.86 ? (t > 0.95 ? V.mul(HC.trim, 0.8).concat([5]) : HC.trim) : V.lerp(HC.tunicDark, HC.tunic, smooth(0, 0.5, t)).concat([2]), 36, 16, [true, false]), A, B,
+      P(wrinkle(tubeMesh(A, B, t => lerp(0.062, 0.06, t) + 0.006 * smooth(0.6, 1, t), (t) => t > 0.86 ? (t > 0.95 ? V.mul(HC.trim, 0.8).concat([5]) : HC.trim) : V.lerp(HC.tunicDark, HC.tunic, smooth(0, 0.5, t)).concat([2]), 36, 16, [true, false]), A, B,
         (t, an) => 0.0028 * Math.sin(an * 6 + t * 3) * smooth(0.2, 0.8, t)), [BI.ua(s), BI.chest]);
     }
     // linen sleeve: soft vertical pleats from the shoulder seam, compression folds bunching at the elbow, gathered cuff
