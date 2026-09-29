@@ -25,7 +25,8 @@ Abre `index.html` en un navegador con WebGPU (Chrome o Edge 113+, Safari 26+, Fi
 | Cámara | Ratón (clic para fijarlo), `Q` `E` | Stick derecho | Arrastrar a la derecha |
 | Saltar · doble salto · planear | `Espacio` (mantener para planear) | A | Saltar |
 | Espada: combo de 3 golpes (mantener para ataque giratorio) | `J` / clic | X | Espada |
-| Voltereta para esquivar · dash en el aire | `Shift` | RB / RT | Esquivar |
+| Voltereta para esquivar · dash en el aire | `Shift` (pulsar) | RB / RT | Esquivar |
+| Esprintar (gasta aguante) | Mantener `Shift` más de 0,25 s mientras corres | Mantener RB / RT | Mantener Esquivar |
 | Estocada descendente (en el aire) | `K` / `Ctrl` | B | Estocada |
 | Ver esqueleto, IK y capa | `B` | Select | Botón Esqueleto |
 | Pausa | `P` / `Esc` | Start | Botón Pausa |
@@ -48,6 +49,18 @@ Objetivo: recoge chispas (cristales dorados tallados con un halo que gira) para 
 - Doble salto, planeo, voltereta de esquiva con invulnerabilidad, dash aéreo, estocada con onda expansiva, combo de 3 golpes y ataque giratorio cargado.
 - Goblins articulados con piel curtida y moteada, brazos y piernas musculosos y garrote con aro de hierro: deambulan, persiguen y atacan; aguantan dos golpes, se tambalean con destello, y al caer salen girando y desaparecen en humo.
 - Hitstop, chispas, sacudida de cámara, cambio de FOV y vibración del mando.
+
+**Mundo vivo: hora, clima, viento y cuerpo** (`src/mod_world.js`)
+- Reloj del mundo: un día completo dura unos 16 minutos reales y la partida empieza a media tarde. El sol recorre el cielo (las sombras lo siguen) y de noche la luna toma el relevo como luz principal fría con sus propias sombras.
+- Cielo físicamente plausible según la altura del sol: mediodía azul, hora dorada, puesta de sol roja con resplandor en el horizonte, hora azul con resplandor violeta, noche con estrellas que titilan, una banda tenue de la Vía Láctea y la luna con mares y halo, y amanecer. La niebla, la luz ambiente, la exposición, la saturación (visión nocturna más fría y desaturada) y los rayos de sol siguen la hora.
+- Luces cálidas de noche: los glifos del santuario brillan en ámbar, braseros con llamas y pavesas en lo alto de las columnas y una luz de fuego parpadeante que ilumina la plaza, los escalones y el portal. Luciérnagas sobre el prado en las noches despejadas.
+- Indicador de hora en la interfaz: esfera dorada sobre fondo oscuro con el sol y la luna girando sobre el horizonte, cielo que cambia de color, hora y clima en letra Cinzel.
+- Clima con transiciones suaves entre despejado, nublado, lluvia, tormenta y niebla (la niebla aparece sobre todo al amanecer). La cobertura de nubes del cielo, su color y las sombras de nubes dependen del clima; las tormentas traen nubes oscuras y pesadas, relámpagos que iluminan el cielo y la escena, y truenos retardados sintetizados.
+- Lluvia en la GPU: miles de gotas instanciadas en una caja alrededor de la cámara (sin coste por gota en la CPU), inclinadas por el viento, salpicaduras en el suelo (anillo y corona), anillos de gotas en el mar y en los charcos, sonido de lluvia. Superficies mojadas: el terreno, las rocas, la corteza y la piedra se oscurecen y brillan, y se forman charcos que reflejan el cielo en el suelo llano y en el camino; tardan en secarse (más rápido al sol).
+- Viento global (`wind`): dirección que cambia poco a poco, fuerza según el clima y ráfagas que recorren el prado a favor del viento. Mueve la hierba, las flores y las copas de los árboles, la capa del héroe, la inclinación de la lluvia y la deriva de las nubes; en las tormentas es mucho más fuerte.
+- Cuerpo: aguante al estilo Zelda con una rueda verde junto al héroe que se desvanece cuando está llena. Esprintar (mantener el botón de esquivar más de 0,25 s mientras corres; un toque sigue siendo una voltereta), planear y nadar gastan aguante. Agotado: no puede esprintar ni planear, corre más lento y jadea (pecho y hombros que suben y bajan, cuerpo inclinado con las manos hacia las rodillas y la cabeza que cabecea) hasta recuperarse del todo; la rueda se vuelve naranja y late.
+- Sudor y lluvia: tras un esfuerzo largo o con el calor del mediodía la piel gana un brillo húmedo; la lluvia empapa el pelo, la piel y la ropa (más oscuros y brillantes) y se secan poco a poco.
+- Variables globales para otros sistemas: `wind` (`x`, `z`, `dirX`, `dirZ`, `strength`, `gust`), `weather` (nombre del estado) y `rainAmount` (0..1). Para pruebas: `__brio.world.setTime(19.5)`, `__brio.world.setWeather('storm')`, `__brio.world.freeze()`.
 
 **Mundo y render**
 - Isla procedural con terrazas, playa con arena mojada brillante junto al agua y marcas onduladas, camino de tierra con guijarros, suelo de hierba con manchas de tono y grandes zonas de pasto seco oliváceo y hondonadas de verde intenso, árboles de copa frondosa con ramas y corteza, rocas facetadas con grietas, líquenes y musgo, islas flotantes con repisas de estratos, roca facetada, estalactitas, raíces y enredaderas con hojas, un santuario con columnas estriadas de piedra envejecida con musgo a parches, glifos brillantes, portal de dovelas talladas en relieve con remolino de luz y plaza de mosaico envejecida (cada baldosa con su tono, suciedad en los bordes y musgo en las juntas) con escalones.

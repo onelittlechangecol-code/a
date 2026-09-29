@@ -7,6 +7,8 @@ struct Frame {
   viewProj: mat4x4f, invViewProj: mat4x4f, lightVP: mat4x4f,
   camPos: vec4f, sunDir: vec4f, sunCol: vec4f, skyTop: vec4f, skyHor: vec4f,
   fogP: vec4f, res: vec4f, misc: vec4f, camRight: vec4f, camUp: vec4f, lightVP2: mat4x4f,
+  // living world (mod_world.js): true sun/moon, wind, weather, body wetness, clouds, glow, warm light, ambient
+  wSun: vec4f, wMoon: vec4f, wWind: vec4f, wWx: vec4f, wHero: vec4f, wCloud: vec4f, wGlow: vec4f, wLight: vec4f, wAmb: vec4f, wCL: vec4f, wCS: vec4f,
 };
 @group(0) @binding(0) var<uniform> F: Frame;
 
@@ -21,9 +23,11 @@ fn fbm(p: vec2f) -> f32 {
   return s / 0.9375;
 }
 fn windOffset(wp: vec3f, h: f32, amp: f32) -> vec3f {
-  let t = F.camPos.w;
-  let gust = 0.6 + 0.4 * sin(t * 0.7 + wp.x * 0.05);
-  return vec3f(sin(t * 1.7 + wp.z * 0.35 + wp.x * 0.2), 0.0, cos(t * 1.3 + wp.x * 0.3)) * amp * h * gust;
+  // global wind: a flutter plus a push along the wind direction in gusts travelling downwind
+  let t = F.camPos.w; let wd = F.wWind.xy; let ws = F.wWind.z;
+  let gust = 0.5 + 0.5 * sin(dot(wp.xz, wd) * 0.12 - F.wWind.w * 1.2);
+  let flut = vec3f(sin(t * (1.2 + ws) + wp.z * 0.35 + wp.x * 0.2), 0.0, cos(t * (1.0 + ws * 0.8) + wp.x * 0.3));
+  return (flut * (0.3 + 0.45 * ws) + vec3f(wd.x, 0.0, wd.y) * (0.3 + gust) * ws) * amp * h;
 }
 struct VIn {
   @location(0) pos: vec3f, @location(1) nrm: vec3f, @location(2) col: vec4f,
@@ -48,12 +52,13 @@ const WGSL_SCENE = WGSL_COMMON + /* wgsl */`
 
 fn skyColor(d: vec3f) -> vec3f {
   let t = clamp(d.y, 0.0, 1.0);
-  let sd = max(dot(d, F.sunDir.xyz), 0.0);
-  // warm the horizon on the sun's side
-  let hor = mix(F.skyHor.rgb, vec3f(1.0, 0.8, 0.6), pow(sd, 3.0) * 0.55 * (1.0 - t));
-  var c = mix(hor, F.skyTop.rgb, pow(t, 0.5));
-  c += F.sunCol.rgb * (pow(sd, 6.0) * 0.22 + pow(sd, 90.0) * 0.8);
-  c = mix(c, F.skyHor.rgb * vec3f(0.92, 0.97, 1.0), smoothstep(0.0, -0.25, d.y));
+  // warm the horizon on the (true) sun's side: golden by day, red at sunset, a violet afterglow at dusk
+  let sd = max(dot(d, F.wSun.xyz), 0.0);
+  let hor = mix(F.skyHor.rgb, F.wGlow.rgb, clamp((pow(sd, 3.0) * 0.8 + pow(sd, 1.2) * 0.25) * F.wGlow.w * (1.0 - t), 0.0, 1.0));
+  var c = mix(hor, F.skyTop.rgb, pow(t, F.wSun.w));
+  let kd = max(dot(d, F.sunDir.xyz), 0.0);
+  c += F.sunCol.rgb * (pow(kd, 6.0) * 0.22 + pow(kd, 90.0) * 0.8) * (1.0 - F.wWx.z * 0.6);
+  c = mix(c, F.skyHor.rgb * vec3f(0.92, 0.97, 1.0), clamp(-d.y * 4.0, 0.0, 1.0));
   return c;
 }
 fn applyFog(c: vec3f, wp: vec3f) -> vec3f {
@@ -90,8 +95,9 @@ fn shadowAt(wp: vec3f, n: vec3f) -> f32 {
   s2 /= 25.0;
   let w2 = smoothstep(0.0, 0.12, min(min(uv2.x, 1.0 - uv2.x), min(uv2.y, 1.0 - uv2.y))) * step(q.z, 1.0) * step(0.0, q.z);
   // drifting cloud shadows, projected along the sun direction
-  let cxz = (wp.xz - F.sunDir.xz / max(F.sunDir.y, 0.2) * wp.y) * 0.018 + vec2f(F.camPos.w * 0.01, F.camPos.w * 0.004);
-  let cloud = smoothstep(0.42, 0.58, fbm(cxz));
+  let cxz = (wp.xz - F.sunDir.xz / max(F.sunDir.y, 0.2) * wp.y) * 0.018 + F.wCloud.xy * 1.25;
+  let cth = 0.5 + (0.3 - F.wWx.z) * 0.6;
+  let cloud = clamp((fbm(cxz) - cth + 0.08) / 0.16, 0.0, 1.0);
   return mix(s1, min(s1 + 0.25, s2), w2) * (1.0 - 0.5 * cloud);
 }
 fn ggx(n: vec3f, v: vec3f, l: vec3f, rough: f32) -> f32 {
@@ -104,7 +110,7 @@ fn ggx(n: vec3f, v: vec3f, l: vec3f, rough: f32) -> f32 {
   return D * G / (4.0 * nv + 0.001);
 }
 // material ids (vertex colour alpha): 1 skin, 2 cloth, 3 leather, 4 steel, 5 gold, 6 eye, 7 hair, 8 foliage
-fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, mat: f32, tng: vec3f) -> vec3f {
+fn lighting(baseIn: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, mat: f32, tng: vec3f) -> vec3f {
   var rough = roughIn; var metal = 0.0; var sss = 0.0; var sheen = 0.0;
   let m = i32(mat + 0.5);
   if (m == 1) { rough = 0.48; sss = 1.0; }
@@ -121,11 +127,19 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
   else if (m == 16) { rough = 0.42; metal = 1.0; }
   else if (m == 17) { rough = 0.7; sss = 0.55; }
   else if (m == 18) { rough = 0.12; sss = 0.3; }
+  // wetness: rain soaks the world (wWx.y) and the hero (wHero.x); sweat glazes the skin (wHero.y)
+  var wk = 0.0;
+  if (m == 10 || m == 11 || m == 13 || m == 14) { wk = F.wWx.y; }
+  else if (m == 8 || m == 12 || m == 17) { wk = F.wWx.y * 0.45; }
+  else if (m == 2 || m == 3 || m == 7 || m == 9) { wk = F.wHero.x; }
+  else if (m == 1) { wk = max(F.wHero.x * 0.8, F.wHero.y); }
+  let base = baseIn * (1.0 - wk * select(0.34, 0.1, m == 1));
+  rough = mix(rough, max(rough * 0.3, 0.1), wk); sheen *= 1.0 - wk * 0.7;
   let v = normalize(F.camPos.xyz - wp); let l = F.sunDir.xyz;
   let nl = dot(n, l);
   // soft wrap for a painterly, forgiving look
   let wrap = clamp((nl + 0.25) / 1.25, 0.0, 1.0);
-  let hemi = mix(vec3f(0.4, 0.34, 0.27), F.skyTop.rgb * 1.05 + vec3f(0.1, 0.12, 0.16), n.y * 0.5 + 0.5);
+  let hemi = mix(vec3f(0.4, 0.34, 0.27), F.skyTop.rgb * 1.05 + vec3f(0.1, 0.12, 0.16), n.y * 0.5 + 0.5) * F.wAmb.rgb;
   let nv = max(dot(n, v), 0.0);
   let F0 = mix(vec3f(0.04), base, metal);
   let fres = F0 + (vec3f(1.0) - F0) * pow(1.0 - nv, 5.0);
@@ -147,22 +161,22 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
     let d1 = dot(t1, hv); let d2 = dot(t2, hv);
     let s1 = pow(sqrt(max(1.0 - d1 * d1, 0.0)), 90.0); let s2 = pow(sqrt(max(1.0 - d2 * d2, 0.0)), 22.0);
     let lit = smoothstep(-0.1, 0.3, nl) * sh * F.sunDir.w;
-    c += F.sunCol.rgb * (s1 * 0.3 + s2 * base * 0.7) * lit;
+    c += F.sunCol.rgb * (s1 * 0.3 * (1.0 + wk * 2.0) + s2 * base * 0.7) * lit;
   } else {
     c += F.sunCol.rgb * ggx(n, v, l, rough) * sh * F.sunDir.w * fres * (1.0 - rough * 0.4);
   }
   // reflections: sky above the horizon, sunlit grass-and-earth below it, dimmed in shadow
   let rd = reflect(-v, n);
-  let ground = vec3f(0.2, 0.24, 0.11) * (F.sunCol.rgb * 0.55 * F.sunDir.w + vec3f(0.35, 0.38, 0.42));
+  let ground = vec3f(0.2, 0.24, 0.11) * (F.sunCol.rgb * 0.55 * F.sunDir.w + vec3f(0.35, 0.38, 0.42) * F.wAmb.rgb);
   let env = mix(skyColor(rd), ground, smoothstep(0.03, -0.1, rd.y)) * mix(0.5, 1.0, sh);
   if (m == 1 || m == 6) {
     // character key light: soft, warm, from above and to one side of the camera, so faces keep their modelling
     let up = vec3f(0.0, 1.0, 0.0); let rt = normalize(cross(up, v));
     let kd = normalize(v * 0.3 + up * 0.6 - rt * 0.85);
     let kw = smoothstep(-0.75, 1.0, dot(n, kd));
-    c += base * vec3f(1.0, 0.9, 0.78) * kw * 0.45 * F.sunDir.w;
+    c += base * vec3f(1.0, 0.9, 0.78) * kw * 0.45 * F.wCloud.w;
     c -= base * amb * 0.12 * (1.0 - kw);
-    c += vec3f(1.0, 0.92, 0.82) * ggx(n, v, kd, max(rough, 0.3)) * 0.02 * F.sunDir.w;
+    c += vec3f(1.0, 0.92, 0.82) * ggx(n, v, kd, max(rough, 0.3)) * 0.02 * F.wCloud.w;
   }
   if (m == 1) {
     // skin: a tight wet sheen over the broad lobe, and soft peach-fuzz scattering at grazing angles
@@ -173,6 +187,14 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
   c += env * fres * mix(0.3 * (1.0 - rough), 0.85, metal) * select(1.0, 0.3, m == 16);
   c += sheen * pow(1.0 - nv, 4.0) * base * (F.skyHor.rgb * 0.9 + F.sunCol.rgb * 0.3);
   c += rim * pow(1.0 - nv, 3.0) * (F.skyHor.rgb * 0.55 + F.sunCol.rgb * 0.35 * max(sh, 0.4));
+  // wet glaze: a tight clear-coat highlight over soaked or sweaty surfaces
+  c += (F.sunCol.rgb * ggx(n, v, l, 0.12) * sh + vec3f(0.5, 0.55, 0.7) * F.wMoon.w * ggx(n, v, F.wMoon.xyz, 0.14)) * wk * select(0.06, 0.16, m == 1);
+  // lightning: a cold flash from the sky
+  c += base * F.wWx.w * vec3f(1.6, 1.7, 2.1) * (0.55 + 0.45 * n.y);
+  // warm firelight from the shrine braziers at night
+  let lv = F.wLight.xyz - wp; let ld = length(lv);
+  let li = F.wLight.w * clamp(1.0 - ld / 20.0, 0.0, 1.0) / (1.0 + ld * ld * 0.06);
+  c += base * vec3f(1.0, 0.5, 0.18) * li * clamp(dot(n, lv / max(ld, 1e-3)) * 0.75 + 0.25, 0.0, 1.0);
   return c;
 }
 
@@ -188,24 +210,52 @@ struct FOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
   let b = F.invViewProj * vec4f(ndc, 0.0, 1.0);
   let d = normalize(a.xyz / a.w - b.xyz / b.w);
   var c = skyColor(d);
+  var cm = 0.0;
+  // night: stars, a faint milky band and the moon, all hidden behind the clouds drawn over them
+  if (F.wHero.z > 0.001 && d.y > -0.05) {
+    let sp = d * 260.0; let sc = floor(sp); let sh = hash3(sc);
+    let jit = vec3f(hash3(sc + 3.1), hash3(sc + 7.7), hash3(sc + 1.3));
+    let sdist = length(sp - sc - jit);
+    let twk = 0.65 + 0.35 * sin(F.camPos.w * (2.0 + sh * 5.0) + sh * 40.0);
+    let star = step(0.985, sh) * clamp(1.0 - sdist / (0.12 + 0.2 * fract(sh * 91.0)), 0.0, 1.0) * twk;
+    let band = fbm(vec2f(atan2(d.x, d.z) * 2.0, d.y * 7.0 - d.x * 3.0)) * exp(-pow((d.y - 0.55 * d.x - 0.2) * 3.2, 2.0));
+    let starCol = mix(vec3f(0.75, 0.85, 1.2), vec3f(1.2, 1.0, 0.8), fract(sh * 37.0));
+    c += (starCol * star * 2.4 + vec3f(0.05, 0.06, 0.1) * band) * F.wHero.z * clamp(d.y * 6.0 + 0.3, 0.0, 1.0);
+  }
+  let md = dot(d, F.wMoon.xyz);
+  if (md > 0.99) {
+    let mdisc = clamp((md - 0.99955) / 0.00006, 0.0, 1.0);
+    let mq = (d - F.wMoon.xyz * md) * 600.0;
+    let mare = 0.72 + 0.28 * fbm(mq.xy * 0.9 + mq.z * 0.7 + vec2f(5.0, 2.0));
+    c = mix(c, vec3f(1.9, 1.95, 2.1) * mare, mdisc * clamp(F.wMoon.y * 12.0 + 0.4, 0.0, 1.0) * F.wMoon.w);
+  }
+  c += vec3f(0.3, 0.36, 0.5) * (pow(max(md, 0.0), 900.0) * 0.5 + pow(max(md, 0.0), 40.0) * 0.06) * F.wMoon.w * F.wHero.w;
   if (d.y > 0.0) {
-    let uv = d.xz / (d.y + 0.12) * 1.4 + vec2f(F.camPos.w * 0.008, F.camPos.w * 0.003);
+    let uv = d.xz / (d.y + 0.12) * 1.4 + F.wCloud.xy;
+    let cov = F.wWx.z; let dark = F.wCloud.z;
     // high wispy cirrus streaks
     let ci = fbm(vec2f(uv.x * 0.35 + uv.y * 0.2, uv.y * 2.4) * 0.8 + vec2f(3.1, 7.7));
-    c = mix(c, vec3f(1.02, 1.0, 0.98), smoothstep(0.55, 0.8, ci) * smoothstep(0.05, 0.4, d.y) * 0.28);
-    // cumulus: density with a detail octave, self-shadowed by marching a step toward the sun
+    c = mix(c, F.wCL.rgb * 0.95, smoothstep(0.55, 0.8, ci) * smoothstep(0.05, 0.4, d.y) * 0.28 * (1.0 - cov * 0.5));
+    // cumulus: density with a detail octave, self-shadowed by marching a step toward the sun; weather sets the cover
     let cl = fbm(uv * 1.3) + 0.22 * fbm(uv * 4.3) - 0.11;
     let so = normalize(F.sunDir.xz + vec2f(1e-4)) * 0.16;
     let cls = fbm((uv + so) * 1.3) + 0.22 * fbm((uv + so) * 4.3) - 0.11;
-    let m = smoothstep(0.5, 0.78, cl) * smoothstep(0.0, 0.3, d.y);
-    let light = clamp(0.55 + (cl - cls) * 3.5, 0.0, 1.0);
+    let lo = 0.5 + (0.3 - cov) * 0.6;
+    let m = clamp((cl - lo) / 0.28, 0.0, 1.0) * clamp(d.y / 0.3, 0.0, 1.0);
+    cm = m * m * (3.0 - 2.0 * m);
+    let light = clamp(0.55 + (cl - cls) * 3.5 * (1.0 - dark * 0.6), 0.0, 1.0);
     let sunG = pow(max(dot(d, F.sunDir.xyz), 0.0), 4.0);
-    var shade = mix(vec3f(0.6, 0.64, 0.76), vec3f(1.12, 1.06, 0.97), light) * (0.85 + 0.35 * sunG);
+    var shade = mix(F.wCS.rgb, F.wCL.rgb, light) * (0.85 + 0.35 * sunG);
+    // heavy storm decks darken toward their thick bellies
+    shade *= 1.0 - dark * clamp((cl - lo) * 1.6, 0.0, 0.75);
     // silver lining: thin edges glow when the sun sits behind them
-    shade += F.sunCol.rgb * sunG * 0.6 * (1.0 - smoothstep(0.5, 0.62, cl));
-    c = mix(c, shade, m * 0.92);
+    shade += F.sunCol.rgb * sunG * 0.6 * (1.0 - clamp((cl - lo) / 0.12, 0.0, 1.0)) * (1.0 - dark);
+    // lightning lights the cloud deck from inside
+    shade += vec3f(2.2, 2.3, 2.8) * F.wWx.w * (0.4 + 0.6 * fbm(uv * 3.0 + F.camPos.w));
+    c = mix(c, shade, cm * mix(0.92, 1.0, cov));
   }
-  c += F.sunCol.rgb * smoothstep(0.9990, 0.9996, dot(d, F.sunDir.xyz)) * 14.0;
+  c += vec3f(0.5, 0.52, 0.6) * F.wWx.w * 0.6;
+  c += F.sunCol.rgb * smoothstep(0.9990, 0.9996, dot(d, F.wSun.xyz)) * 14.0 * step(-0.03, F.wSun.y) * (1.0 - cm);
   // distant islands and ranges on the horizon: two hazy layers, only in some directions
   let az = atan2(d.x, d.z);
   for (var L = 0; L < 2; L++) {
@@ -213,7 +263,7 @@ struct FOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
     let mask = smoothstep(0.3, 0.42, fbm(vec2f(az * 0.9 + fl * 5.3, 2.0 + fl)));
     let ridge = (0.02 + 0.07 * fbm(vec2f(az * (6.0 + fl * 5.0), fl * 3.0)) + 0.02 * fbm(vec2f(az * 22.0, fl))) * mask * (1.0 - fl * 0.45);
     let inM = step(d.y, ridge) * step(-0.02, d.y);
-    let haze = mix(vec3f(0.44, 0.55, 0.68), F.skyHor.rgb, 0.45 + fl * 0.3) * (0.9 + 0.2 * smoothstep(0.0, ridge + 1e-4, d.y));
+    let haze = mix(vec3f(0.44, 0.55, 0.68) * F.wAmb.rgb, F.skyHor.rgb, 0.45 + fl * 0.3 + F.wWx.z * 0.3) * (0.9 + 0.2 * smoothstep(0.0, ridge + 1e-4, d.y));
     c = mix(c, haze, inM * (0.85 - fl * 0.25));
   }
   return vec4f(c, 1.0);
@@ -272,10 +322,28 @@ struct TOut { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1
   base *= 1.0 + beach * clamp((above - 0.6) / 0.2, 0.0, 1.0) * rip * 0.09;
   let wet = clamp((0.62 - above) / 0.22, 0.0, 1.0) * step(-0.2, above);
   base *= 1.0 - wet * 0.45;
+  // rain: soaked darker ground, glossier, and still puddles pooling on flat ground and in the path ruts
+  let rw = F.wWx.y * step(0.0, above);
+  var rough = mix(0.93, 0.25, wet);
+  var pud = 0.0;
+  if (rw > 0.001) {
+    let flatG = clamp((n.y - 0.9) / 0.07, 0.0, 1.0);
+    pud = clamp((fbm(v.wp.xz * 0.6 + vec2f(4.0, 1.0)) + dirt * 0.25 - 0.66) / 0.07, 0.0, 1.0) * flatG * clamp((rw - 0.25) / 0.45, 0.0, 1.0) * (1.0 - beach);
+    base *= (1.0 - rw * 0.3 * (1.0 - rockW * 0.3)) * (1.0 - pud * 0.35);
+    rough = mix(mix(rough, 0.32, rw * 0.85), 0.03, pud);
+    // raindrop rings on the puddles
+    let rp = rainRipple(v.wp.xz, F.camPos.w) * F.wWx.x;
+    n = normalize(mix(n, vec3f(0.0, 1.0, 0.0), pud) + vec3f(rp.x, 0.0, rp.y) * pud * 0.5);
+  }
   let sh = shadowAt(v.wp, n);
-  var c = lighting(base, n, v.wp, mix(0.93, 0.25, wet), 0.0, sh, 0.0, vec3f(0.0, 1.0, 0.0));
+  var c = lighting(base, n, v.wp, rough, 0.0, sh, 0.0, vec3f(0.0, 1.0, 0.0));
   let vdir = normalize(F.camPos.xyz - v.wp);
-  c += F.sunCol.rgb * pow(max(dot(n, normalize(vdir + F.sunDir.xyz)), 0.0), 60.0) * wet * sh * 0.5;
+  c += F.sunCol.rgb * pow(max(dot(n, normalize(vdir + F.sunDir.xyz)), 0.0), 60.0) * max(wet, pud) * sh * 0.5;
+  if (pud > 0.0) {
+    // puddle sheen: a mirror of the sky, strongest at grazing angles
+    let pf = 0.04 + 0.96 * pow(1.0 - max(dot(n, vdir), 0.0), 5.0);
+    c = mix(c, skyColor(reflect(-vdir, n)) * 0.55, pud * pf * 0.6 / (1.0 + distance(v.wp, F.camPos.xyz) * 0.02));
+  }
   if (F.misc.z > 0.5 && v.wp.y < F.fogP.z - 0.05) { discard; }
   return vec4f(applyFog(c, v.wp), 1.0);
 }
@@ -290,17 +358,20 @@ struct VOut {
   var wp = meshWorld(i);
   // wind: blades and petals sway in travelling gusts (more at the tips); canopies roll slowly
   let tw = F.camPos.w; let mid = i32(i.col.a + 0.5);
+  let wd = F.wWind.xy; let ws = F.wWind.z;
   if (mid == 17) {
-    let gust = 0.5 + 0.5 * sin(dot(wp.xz, vec2f(0.21, 0.13)) - tw * 1.3);
-    let sway = (sin(tw * 2.1 + wp.x * 0.7 + wp.z * 0.5) * 0.6 + gust * 0.9) * i.pos.y * i.pos.y * 0.12;
-    wp += vec3f(sway, -abs(sway) * 0.25, sway * 0.45);
+    // gusts roll across the meadow downwind (global wind: direction, strength, travelling phase)
+    let gust = 0.5 + 0.5 * sin(dot(wp.xz, wd) * 0.25 - F.wWind.w * 1.3 + sin(dot(wp.xz, vec2f(-wd.y, wd.x)) * 0.08) * 1.5);
+    let flick = sin(tw * 2.1 * (0.7 + 0.5 * ws) + wp.x * 0.7 + wp.z * 0.5) * (0.3 + 0.35 * ws);
+    let sway = min(flick + gust * gust * 1.5 * ws, 2.2) * i.pos.y * i.pos.y * 0.12;
+    wp += vec3f(wd.x * sway, -abs(sway) * 0.25, wd.y * sway);
     // blades part around the hero and flatten underfoot
     let dh = wp.xz - vec2f(F.camRight.w, F.camUp.w); let dl = length(dh);
     let push = smoothstep(1.1, 0.25, dl) * i.pos.y;
     wp += vec3f(dh.x / max(dl, 0.05) * push * 0.35, -push * 0.3, dh.y / max(dl, 0.05) * push * 0.35);
   } else if (mid == 8) {
-    let roll = sin(tw * 0.8 + wp.x * 0.15 + wp.z * 0.11) * 0.025 * max(i.pos.y + 0.5, 0.0);
-    wp += vec3f(roll, 0.0, roll * 0.6);
+    let roll = (sin(tw * (0.6 + ws * 0.5) + wp.x * 0.15 + wp.z * 0.11) * (0.5 + ws * 0.5) + ws * 0.6) * 0.025 * max(i.pos.y + 0.5, 0.0);
+    wp += vec3f(wd.x * roll, 0.0, wd.y * roll);
   }
   let s2 = vec3f(dot(i.m0.xyz, i.m0.xyz), dot(i.m1.xyz, i.m1.xyz), dot(i.m2.xyz, i.m2.xyz));
   let n = normalize(mat3x3f(i.m0.xyz, i.m1.xyz, i.m2.xyz) * (i.nrm / max(s2, vec3f(1e-10))));
@@ -454,6 +525,19 @@ fn heightAtTex(xz: vec2f) -> f32 {
   let c = textureLoad(heightTex, i + vec2i(0, 1), 0).r; let d = textureLoad(heightTex, i + vec2i(1, 1), 0).r;
   return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
+// rain rings: one drop per cell per cycle (jittered centre and phase); returns a normal tilt in xz
+fn rainRipple(pIn: vec2f, t: f32) -> vec2f {
+  let g = pIn * 1.7; let id = floor(g); let f = fract(g) - 0.5;
+  let h = hash2(id); let h2 = hash2(id + vec2f(17.3, 5.1));
+  let cyc = t * 1.3 + h;
+  let ph = fract(cyc);
+  let on = step(hash2(id + vec2f(floor(cyc), 3.3)), F.wWx.x * 0.9 + 0.1);
+  let c = vec2f(h2 - 0.5, fract(h * 7.13) - 0.5) * 0.4;
+  let dv = f - c; let d = length(dv);
+  let r = ph * 0.42;
+  let ring = sin((d - r) * 45.0) * exp(-abs(d - r) * 28.0) * (1.0 - ph) * on;
+  return dv / max(d, 1e-3) * ring;
+}
 fn waveH(p: vec2f, t: f32) -> f32 {
   return sin(p.x * 0.35 + t * 0.9) * 0.5 + sin(p.y * 0.42 - t * 1.1) * 0.4 + sin((p.x + p.y) * 0.8 + t * 1.7) * 0.18
     + (vnoise(p * 0.9 + vec2f(t * 0.4, t * 0.3)) - 0.5) * 0.7 + (vnoise(p * 2.3 - vec2f(t * 0.6, 0.0)) - 0.5) * 0.3;
@@ -474,6 +558,11 @@ fn waveH(p: vec2f, t: f32) -> f32 {
   let rx = vnoise(q1 + vec2f(e2, 0.0)) + 0.5 * vnoise(q2 + vec2f(e2 * 2.2, 0.0));
   let rz = vnoise(q1 + vec2f(0.0, e2)) + 0.5 * vnoise(q2 + vec2f(0.0, e2 * 2.2));
   n = normalize(n + vec3f(-(rx - r0), 0.0, -(rz - r0)) * ra / e2);
+  // rain: expanding drop rings, fading out with distance
+  if (F.wWx.x > 0.001) {
+    let rp = (rainRipple(p, t) + rainRipple(p * 0.77 + vec2f(3.7, 1.9), t * 1.13)) * F.wWx.x / (1.0 + dist * 0.08);
+    n = normalize(n + vec3f(rp.x, 0.0, rp.y) * 0.6);
+  }
   let depth = max(-heightAtTex(p), 0.0);
   let vd = normalize(F.camPos.xyz - v.wp);
   let fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, vd), 0.0), 5.0);
@@ -499,7 +588,7 @@ fn waveH(p: vec2f, t: f32) -> f32 {
   let net = clamp(1.0 - min(lace1, lace2) * 6.0, 0.0, 1.0);
   let near = clamp((0.9 - depth) / 0.9, 0.0, 1.0);
   let foam = max(wash * (0.75 + 0.25 * fn1), net * near * 0.9);
-  c = mix(c, vec3f(1.0), clamp(foam, 0.0, 1.0) * 0.9);
+  c = mix(c, F.wAmb.rgb * 0.78 + F.sunCol.rgb * 0.2 + F.wWx.w * 2.0, clamp(foam, 0.0, 1.0) * 0.9);
   let alpha = clamp(mix(0.3, 0.95, smoothstep(0.0, 2.4, depth)) + fres * 0.25 + foam, 0.0, 1.0);
   c = applyFog(c, v.wp);
   return vec4f(c * alpha, alpha);
@@ -514,7 +603,9 @@ struct POut { @builtin(position) pos: vec4f, @location(0) uv: vec2f, @location(1
   var wp: vec3f; var ring = 0.0;
   if (i.col.a < 0.0) { ring = 1.0; wp = i.ps.xyz + vec3f(c.x, 0.0, c.y) * i.ps.w; }
   else { wp = i.ps.xyz + (F.camRight.xyz * c.x + F.camUp.xyz * c.y) * i.ps.w; }
-  var o: POut; o.pos = F.viewProj * vec4f(wp, 1.0); o.uv = c; o.col = vec4f(i.col.rgb, abs(i.col.a)); o.ring = ring; return o;
+  // plain particles (dust, spray: colours up to 1) take the scene light; hotter ones (sparks, motes) glow on their own
+  let lit = select(vec3f(1.0), F.wAmb.rgb * 0.7 + F.sunCol.rgb * 0.22 + F.wWx.w * 1.5, max(i.col.r, max(i.col.g, i.col.b)) <= 1.001);
+  var o: POut; o.pos = F.viewProj * vec4f(wp, 1.0); o.uv = c; o.col = vec4f(i.col.rgb * lit, abs(i.col.a)); o.ring = ring; return o;
 }
 @fragment fn fsPart(v: POut) -> @location(0) vec4f {
   let r = length(v.uv);
@@ -531,7 +622,7 @@ struct LOut { @builtin(position) pos: vec4f, @location(0) col: vec4f };
 @vertex fn vsLine(i: LIn) -> LOut { var o: LOut; o.pos = F.viewProj * vec4f(i.pos, 1.0); o.col = i.col; return o; }
 @fragment fn fsLine(v: LOut) -> @location(0) vec4f { return vec4f(v.col.rgb * 1.6, 1.0); }
 @fragment fn fsTrail(v: LOut) -> @location(0) vec4f { return vec4f(v.col.rgb * v.col.a, v.col.a); }
-`;
+` + WGSL_WORLD;
 
 const WGSL_SHADOW = WGSL_COMMON + /* wgsl */`
 @vertex fn vsShadowMesh(i: VIn) -> @builtin(position) vec4f { return F.lightVP * vec4f(meshWorld(i), 1.0); }
@@ -570,7 +661,7 @@ fn blur(uv: vec2f, dir: vec2f) -> vec4f {
 @fragment fn fsBlurH(v: FOut) -> @location(0) vec4f { return blur(v.uv, vec2f(1.0, 0.0)); }
 @fragment fn fsBlurV(v: FOut) -> @location(0) vec4f { return blur(v.uv, vec2f(0.0, 1.0)); }
 fn aces(x: vec3f) -> vec3f { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), vec3f(0.0), vec3f(1.0)); }
-struct Post { sun: vec4f };
+struct Post { sun: vec4f, fx: vec4f };
 @group(0) @binding(3) var<uniform> PU: Post;
 @fragment fn fsFinal(v: FOut) -> @location(0) vec4f {
   // slight chromatic fringe toward the frame edges
@@ -594,10 +685,12 @@ struct Post { sun: vec4f };
   }
   let falloff = 1.0 - smoothstep(0.0, 0.9, length(toSun * vec2f(PU.sun.w, 1.0)));
   c += rays * 0.032 * PU.sun.z * falloff * vec3f(1.0, 0.92, 0.78);
-  c *= 0.95;
+  // exposure tracks the time of day; night vision loses colour and drifts blue
+  c *= 0.95 * PU.fx.x;
   c = aces(c);
   let l = dot(c, vec3f(0.2126, 0.7152, 0.0722));
-  c = mix(vec3f(l), c, 1.1);
+  c = mix(vec3f(l), c, PU.fx.y);
+  c *= mix(vec3f(1.0), vec3f(0.86, 0.95, 1.16), PU.fx.w);
   // split toning: cool shadows, warm highlights
   c *= mix(vec3f(0.94, 0.98, 1.06), vec3f(1.05, 1.0, 0.93), smoothstep(0.05, 0.85, l));
   c *= 1.0 - dot(q, q) * 0.42;
@@ -613,7 +706,7 @@ const QUALITY = {
   media: { label: 'Media', dpr: 1.25, maxPix: 1920 * 1080, refl: true, fine: true, grass: true },
   baja: { label: 'Baja', dpr: 1, maxPix: 1280 * 720, refl: false, fine: false, grass: false },
 };
-const FRAME_FLOATS = 104;
+const FRAME_FLOATS = 148;
 const INST_FLOATS = 24;
 
 async function initRenderer(meshes) {
@@ -697,7 +790,7 @@ async function initRenderer(meshes) {
     { binding: 0, visibility: VF, buffer: { type: 'uniform' } },
     { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'depth' } },
     { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'comparison' } },
-    { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+    { binding: 3, visibility: VF, texture: { sampleType: 'unfilterable-float' } },
     { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'depth' } },
     { binding: 5, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
     { binding: 6, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
@@ -752,6 +845,8 @@ async function initRenderer(meshes) {
   GR.pPart = P('vsPart', 'fsPart', [vP], { blend: premul, depth: depthRO });
   GR.pTrail = P('vsLine', 'fsTrail', [vL], { blend: premul, depth: depthRO });
   GR.pLine = P('vsLine', 'fsLine', [vL], { topology: 'line-list', depth: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'always' } });
+  GR.pRain = P('vsRain', 'fsRain', [], { blend: premul, depth: depthRO });
+  GR.pSplash = P('vsSplash', 'fsSplash', [], { blend: premul, depth: depthRO });
   const SP = (vs, buffers) => device.createRenderPipeline({
     layout: shadowPL, vertex: { module: shadowMod, entryPoint: vs, buffers },
     primitive: { topology: 'triangle-list', cullMode: 'none' },
@@ -795,7 +890,7 @@ function resizeTargets() {
   GR.bgBright = bg(GR.pBright, [{ binding: 0, resource: GR.hdr.createView() }, { binding: 1, resource: GR.linSampler }]);
   GR.bgBlurH = bg(GR.pBlurH, [{ binding: 0, resource: GR.bloomA.createView() }, { binding: 1, resource: GR.linSampler }]);
   GR.bgBlurV = bg(GR.pBlurV, [{ binding: 0, resource: GR.bloomB.createView() }, { binding: 1, resource: GR.linSampler }]);
-  if (!GR.postUB) GR.postUB = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  if (!GR.postUB) GR.postUB = d.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   GR.bgFinal = bg(GR.pFinal, [{ binding: 0, resource: GR.hdr.createView() }, { binding: 1, resource: GR.linSampler }, { binding: 2, resource: GR.bloomA.createView() }, { binding: 3, resource: { buffer: GR.postUB } }]);
 }
 

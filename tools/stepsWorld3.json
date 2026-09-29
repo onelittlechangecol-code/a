@@ -1,0 +1,12 @@
+[
+ {"js":"B=window.__brio;B.startGame();B.world.freeze(true);B.world.setWeather('clear');B.world.setTime(10);","frames":40},
+ {"js":"B.world.body.st=0;B.cam.manualT=-100;B.cam.dist=2.6;B.cam.curDist=2.6;B.cam.yaw=B.player.yaw+1.4;B.cam.pitch=0.1;","frames":90},
+ {"js":"B.cam.target=[B.player.pos[0],B.player.pos[1]+0.9,B.player.pos[2]];","frames":1,"shot":"w3_ex1"},
+ {"js":"","frames":13},
+ {"js":"B.cam.target=[B.player.pos[0],B.player.pos[1]+0.9,B.player.pos[2]];","frames":1,"shot":"w3_ex2"},
+ {"js":"window.__ex={ex:B.world.body.exhausted,st:+B.world.body.st.toFixed(2)};B.world.body.st=1;B.world.body.exhausted=false;B.world.body.pant=0;","frames":10},
+ {"js":"B.keys.up=true;B.press('dash');B.keys.dash=true;","frames":6},
+ {"js":"window.__d1={roll:B.player.rollT>0};","frames":40},
+ {"js":"window.__d2={sprint:B.world.body.sprint,sp:+Math.hypot(B.player.vel[0],B.player.vel[2]).toFixed(2),st:+B.world.body.st.toFixed(2)};B.keys.dash=false;","frames":60},
+ {"js":"window.__d3={sprint:B.world.body.sprint,sp:+Math.hypot(B.player.vel[0],B.player.vel[2]).toFixed(2)};B.keys.up=false;console.warn('RESULTS '+JSON.stringify([window.__ex,window.__d1,window.__d2,window.__d3]));","frames":2}
+]
