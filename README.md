@@ -25,6 +25,8 @@ Abre `index.html` en un navegador con WebGPU (Chrome o Edge 113+, Safari 26+, Fi
 | Cámara | Ratón (clic para fijarlo), `Q` `E` | Stick derecho | Arrastrar a la derecha |
 | Saltar · doble salto · planear | `Espacio` (mantener para planear) | A | Saltar |
 | Espada: combo de 3 golpes (mantener para ataque giratorio) | `J` / clic | X | Espada |
+| Cambiar de arma (espada, lanza, martillo, arco) | `1`–`4`, `Tab` para rotar | Cruceta ◀ ▶ | Botón dorado de arma |
+| Arco: tensar y disparar | Mantener `J` / clic, soltar | Mantener X, soltar | Mantener Arco, soltar |
 | Voltereta para esquivar · dash en el aire | `Shift` | RB / RT | Esquivar |
 | Estocada descendente (en el aire) | `K` / `Ctrl` | B | Estocada |
 | Ver esqueleto, IK y capa | `B` | Select | Botón Esqueleto |
@@ -48,6 +50,16 @@ Objetivo: recoge chispas (cristales dorados tallados con un halo que gira) para 
 - Doble salto, planeo, voltereta de esquiva con invulnerabilidad, dash aéreo, estocada con onda expansiva, combo de 3 golpes y ataque giratorio cargado.
 - Goblins articulados con piel curtida y moteada, brazos y piernas musculosos y garrote con aro de hierro: deambulan, persiguen y atacan; aguantan dos golpes, se tambalean con destello, y al caer salen girando y desaparecen en humo.
 - Hitstop, chispas, sacudida de cámara, cambio de FOV y vibración del mando.
+
+**Armas**
+- Cuatro armas, cada una con su malla procedural al nivel de la espada, su animación de ataque guiada por el mismo rig (IK de brazos, la mano izquierda se ancla al asta en las armas a dos manos), su alcance, daño y retroceso, su respuesta al golpe (hitstop, chispas, sacudida de cámara, cambio de FOV, vibración) y sus sonidos sintetizados:
+  - **Espada del Alba**: la de siempre (arma por defecto).
+  - **Lanza del Vigía**: asta de fresno con empuñadura de cordón, virolas y regatón dorados, cubo alado con gemas y borla roja, hoja de hoja de laurel con arista. Combo de estocadas de largo alcance (la tercera, una embestida); manteniendo el ataque, ráfaga de estocadas rápidas que acaba en embestida.
+  - **Martillo del Titán**: mango de madera oscura con cuero y lengüetas de hierro, cabeza forjada con caras de acero octogonales, bandas y sol de oro con gemas que brillan. Lento y pesado: barridos que lanzan a los goblins por los aires y un tercer golpe que machaca el suelo con onda expansiva (anillos, polvo, esquirlas). Manteniendo el ataque se carga un golpe sísmico con salto; la estocada aérea con el martillo también produce la onda.
+  - **Arco del Halcón**: pala recurvada laminada sobre empuñadura tallada, culatines dorados, cuerda que se tensa hasta la mano y palas que se doblan al tensar; carcaj en la cadera con flechas visibles. Mantén el ataque para tensar (la cámara se acerca por encima del hombro con retícula), suelta para disparar. Flechas simuladas con gravedad y resistencia del aire que se clavan en el terreno, en árboles, rocas y goblins (tiro a la cabeza: crítico) y se pueden recoger pasando por encima. Si el módulo de física expone fuego (`fireNear`/`isBurningAt` e `igniteAt`), las flechas que pasan por una llama arden y prenden lo que tocan.
+- Las armas están repartidas por la isla, clavadas en el suelo o tiradas con un destello dorado: se recogen pasando por encima. Los goblins a veces sueltan su **garrote**, que puede usarse como arma pesada (más rápido y más débil que el martillo). También hay haces de flechas.
+- Selector de armas dorado sobre fondo oscuro (iconos SVG, tipografía Cinzel) que aparece un momento al cambiar, e indicador del arma actual (y flechas) bajo el contador de chispas.
+- Todo vive en `src/mod_weapons.js`, que envuelve funciones del núcleo al cargar (simulación, pose, rig, cámara, instancias, flujo) sin editar los demás archivos; `window.__brio.weapons` expone la API para pruebas.
 
 **Mundo y render**
 - Isla procedural con terrazas, playa con arena mojada brillante junto al agua y marcas onduladas, camino de tierra con guijarros, suelo de hierba con manchas de tono y grandes zonas de pasto seco oliváceo y hondonadas de verde intenso, árboles de copa frondosa con ramas y corteza, rocas facetadas con grietas, líquenes y musgo, islas flotantes con repisas de estratos, roca facetada, estalactitas, raíces y enredaderas con hojas, un santuario con columnas estriadas de piedra envejecida con musgo a parches, glifos brillantes, portal de dovelas talladas en relieve con remolino de luz y plaza de mosaico envejecida (cada baldosa con su tono, suciedad en los bordes y musgo en las juntas) con escalones.

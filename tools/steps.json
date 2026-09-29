@@ -1,0 +1,78 @@
+[
+{
+"js": "B=window.__brio;B.startGame();",
+"frames": 30,
+"shot": "t1"
+},
+{
+"js": "const f=B.foes[0];f.state='x';B.player.pos=[f.pos[0],f.pos[1],f.pos[2]+1.6];B.player.yaw=Math.PI;B.rig.init=false;B.cam.yaw=0.6;B.press('punch');",
+"frames": 9
+},
+{
+"js": "B.keys.punch=false;B.press('punch');",
+"frames": 14
+},
+{
+"js": "B.press('punch');",
+"frames": 20,
+"shot": "t2b"
+},
+{
+"js": "window.__r1={alive:B.foes[0].alive, foes:B.stats.foes, hp:B.foes[0].hp, d:+Math.hypot(B.foes[0].pos[0]-B.player.pos[0],B.foes[0].pos[2]-B.player.pos[2]).toFixed(2)};",
+"frames": 40
+},
+{
+"js": "const S=B.WORLD;B.player.pos=[-6,B.player.pos[1],-14];B.player.pos[1]=40;B.player.yaw=-Math.PI/2*1.2;B.rig.init=false;B.cam.yaw=Math.PI/2*0.8;",
+"frames": 90,
+"shot": "t3"
+},
+{
+"js": "B.keys.left=true;B.press('jump');B.keys.jump=true;",
+"frames": 16
+},
+{
+"js": "B.press('jump');",
+"frames": 50,
+"shot": "t4"
+},
+{
+"js": "window.__r2={st:B.rig.state, vy:B.player.vel[1]};B.keys.left=false;B.keys.jump=false;",
+"frames": 120
+},
+{
+"js": "B.player.pos=[0,3,88];B.rig.init=false;window.__hp0=B.player.hp;",
+"frames": 150,
+"shot": "t5"
+},
+{
+"js": "window.__r3={hp0:window.__hp0,hp:B.player.hp,pos:B.player.pos.map(v=>+v.toFixed(1)),falls:B.stats.falls};const f=B.foes[3];B.player.pos=[f.pos[0]+1.5,f.pos[1]+5,f.pos[2]];B.player.vel=[0,0,0];B.player.onGround=false;B.player.airT=1;B.rig.init=false;",
+"frames": 10
+},
+{
+"js": "B.press('pound');",
+"frames": 90,
+"shot": "t6"
+},
+{
+"js": "window.__r4={alive3:B.foes[3].alive};B.stats.orbs=B.state.required-1;const o=B.WORLD.orbs.find(o=>!o.got);B.player.pos=[o.x,o.y-0.8,o.z];B.rig.init=false;",
+"frames": 30
+},
+{
+"js": "window.__r5={awake:B.state.shrineAwake};const S=B.WORLD.pillars[0];B.player.pos=[0.3,40,-14+5];B.rig.init=false;B.cam.yaw=0.2;",
+"frames": 150,
+"shot": "t7"
+},
+{
+"js": "B.keys.up=true;B.press('jump');B.keys.jump=true",
+"frames": 40
+},
+{
+"js": "B.keys.jump=false;",
+"frames": 80,
+"shot": "t8"
+},
+{
+"js": "B.keys.up=false;console.warn('RESULTS '+JSON.stringify([window.__r1,window.__r2,window.__r3,window.__r4,window.__r5,{mode:B.state.mode,pos:B.player.pos.map(v=>+v.toFixed(1))}]))",
+"frames": 2
+}
+]
