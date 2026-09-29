@@ -11,6 +11,10 @@ Un juego de plataformas y exploración en 3D, en un solo archivo (`index.html`),
 - Cinemática de introducción con tres planos (grúa aérea sobre la isla, barrido por el prado y primer plano del héroe) y subtítulos que cuentan la historia de las Chispas. Se salta con cualquier tecla, clic o botón.
 - Interfaz limpia, sin guías: solo vida y chispas; las misiones aparecen como un rótulo breve; los controles y opciones están en el menú de pausa.
 
+## Jugar online
+
+Cada push a la rama principal publica `index.html` en GitHub Pages (`.github/workflows/pages.yml`): `https://onelittlechangecol-code.github.io/a/`. Hace falta activar Pages una vez en *Settings → Pages → Source: GitHub Actions*.
+
 ## Código
 
 El juego se publica como un único `index.html`, generado desde `src/` con `python3 src/build.py` (los módulos `src/mod_*.js` se insertan tras `partE.js`). Las pruebas están en `tools/`: `node test2.mjs` recorre el camino con el guion de `tools/steps.json`, reúne las chispas y cruza el portal.
