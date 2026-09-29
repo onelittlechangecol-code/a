@@ -974,7 +974,7 @@ function buildHero() {
       d += 0.0065 * G(ax, Y, 0.058, -0.02, 0.021, 0.015);                // cheekbones
       d += -0.0028 * G(ax, Y, 0.05, -0.062, 0.019, 0.016);                // cheek hollows
       d += -0.002 * G(ax, Y, 0.072, 0.03, 0.014, 0.02);                   // temples
-      d += -0.0025 * G(X, Y, 0, -0.074, 0.04, 0.022);                      // maxilla / muzzle
+      d += 0.0015 * G(X, Y, 0, -0.064, 0.022, 0.01);                      // maxilla / muzzle
       // nose: bridge rising from between the eyes to the tip, alae and a soft tip ball
       const t = clamp((0.012 - Y) / 0.056, 0, 1), w = 0.0072 + 0.0052 * t;
       d += (0.0025 + 0.0175 * Math.pow(t, 1.35)) * Math.exp(-((X / w) ** 2)) * smooth(0.02, 0.006, Y) * smooth(-0.056, -0.045, Y);
@@ -1001,16 +1001,15 @@ function buildHero() {
     c = V.lerp(c, V.mul(HC.skin, 0.88), 0.15 * G(ax, Y, 0.041, -0.009, 0.018, 0.006) * front);
     c = V.lerp(c, [0.8, 0.64, 0.56], 0.1 * smooth(-0.06, -0.11, Y) * (1 - G(X, Y, 0, -0.107, 0.02, 0.014)));
     const lip = Math.max(G(X, Y + 0.0013 * Math.cos(X * 160) * G(X, 0, 0, 0, 0.014, 1), 0, -0.069, 0.028, 0.0044), G(X, Y, 0, -0.0795, 0.024, 0.0056));
-    c = V.lerp(c, V.mul(HC.lip, 0.95), smooth(0.25, 0.75, lip) * 0.75 * front);
-    c = V.lerp(c, [0.93, 0.62, 0.58], G(X, Y, 0, -0.0786, 0.011, 0.0022) * 0.35 * front);   // moist sheen on the lower lip
-    c = V.lerp(c, V.mul(HC.lip, 0.8), G(X, Y, 0, -0.068, 0.027, 0.0035) * 0.35 * front);
-    c = V.lerp(c, [0.3, 0.12, 0.1], G(X, Y + 0.003 * (X / 0.03) ** 2, 0, -0.0732, 0.032, 0.0008) * 0.85 * front);
+    c = V.lerp(c, V.lerp(HC.lip, HC.blush, 0.35), smooth(0.25, 0.75, lip) * 0.7 * front);
+    c = V.lerp(c, [0.9, 0.6, 0.56], G(X, Y, 0, -0.0786, 0.011, 0.0022) * 0.18 * front);   // moist sheen on the lower lip
+        c = V.lerp(c, [0.3, 0.12, 0.1], G(X, Y + 0.003 * (X / 0.03) ** 2, 0, -0.0732, 0.032, 0.0008) * 0.85 * front);
     c = V.lerp(c, [0.45, 0.24, 0.2], G(ax, Y, 0.031, -0.0745, 0.0035, 0.002) * 0.3 * front);
     c = V.lerp(c, [0.3, 0.14, 0.12], G(ax, Y, 0.0085, -0.0515, 0.0032, 0.0018) * smooth(0, -0.4, n0[1] - 0.2) * 0.9);
     // cavity occlusion from the sculpt: sockets, alar creases, mouth corners and the groove under the lip sit in shade
-    const cav = FACE.disp(X, Y, front), ao = clamp(1 + cav * 40, 0.66, 1.04)
+    const cav = FACE.disp(X, Y, front), ao = clamp(1 + Math.min(cav, 0) * 40 * (1 - G(X, Y, 0, -0.062, 0.012, 0.008)), 0.66, 1.0)
       * (1 - front * (0.13 * G(ax, Y, 0.013, -0.022, 0.0065, 0.02) + 0.13 * G(ax, Y, 0.038, 0.017, 0.022, 0.006) + 0.09 * G(ax, Y, 0.056, -0.046, 0.02, 0.012) + 0.1 * G(ax, Y, 0.021, 0.004, 0.006, 0.008)));
-    const under = 1 - 0.16 * G(X, Y, 0, -0.054, 0.013, 0.0035) * front - 0.12 * G(ax, Y, 0.017, -0.052, 0.005, 0.004) * front - 0.1 * G(X, Y, 0, -0.086, 0.014, 0.003) * front;
+    const under = 1 - 0.06 * G(X, Y, 0, -0.054, 0.012, 0.0028) * front - 0.1 * G(ax, Y, 0.017, -0.052, 0.005, 0.004) * front - 0.08 * G(X, Y, 0, -0.086, 0.014, 0.003) * front;
     c = V.mul(c, ao * under);
     return c.concat([1]);
   }, 110, 90, (q, n0) => {
@@ -2952,9 +2951,9 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
     // character key light: soft, warm, from above and to one side of the camera, so faces keep their modelling
     let up = vec3f(0.0, 1.0, 0.0); let rt = normalize(cross(up, v));
     let kd = normalize(v * 0.3 + up * 0.6 - rt * 0.85);
-    let kw = clamp((dot(n, kd) + 0.15) / 1.15, 0.0, 1.0);
+    let kw = clamp((dot(n, kd) + 0.4) / 1.4, 0.0, 1.0);
     c += base * vec3f(1.0, 0.9, 0.78) * kw * 0.45 * F.sunDir.w;
-    c -= base * amb * 0.3 * (1.0 - kw);
+    c -= base * amb * 0.2 * (1.0 - kw);
     c += vec3f(1.0, 0.92, 0.82) * ggx(n, v, kd, max(rough, 0.3)) * 0.02 * F.sunDir.w;
   }
   if (m == 1) {
@@ -3201,7 +3200,14 @@ fn waveH(p: vec2f, t: f32) -> f32 {
   let h0 = waveH(p, t); let hx = waveH(p + vec2f(e, 0.0), t); let hz = waveH(p + vec2f(0.0, e), t);
   let dist = distance(F.camPos.xyz, v.wp);
   let amp = 0.14 / (1.0 + dist * 0.02);
-  let n = normalize(vec3f(-(hx - h0) / e * amp, 1.0, -(hz - h0) / e * amp));
+  var n = normalize(vec3f(-(hx - h0) / e * amp, 1.0, -(hz - h0) / e * amp));
+  // wind ripples: two drifting layers of fine noise perturb the normal, fading with distance
+  let ra = 0.05 / (1.0 + dist * 0.06); let q1 = p * 5.0 + vec2f(t * 0.6, t * 0.35); let q2 = p * 11.0 - vec2f(t * 0.4, -t * 0.7);
+  let e2 = 0.04;
+  let r0 = vnoise(q1) + 0.5 * vnoise(q2);
+  let rx = vnoise(q1 + vec2f(e2, 0.0)) + 0.5 * vnoise(q2 + vec2f(e2 * 2.2, 0.0));
+  let rz = vnoise(q1 + vec2f(0.0, e2)) + 0.5 * vnoise(q2 + vec2f(0.0, e2 * 2.2));
+  n = normalize(n + vec3f(-(rx - r0), 0.0, -(rz - r0)) * ra / e2);
   let depth = max(-heightAtTex(p), 0.0);
   let vd = normalize(F.camPos.xyz - v.wp);
   let fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, vd), 0.0), 5.0);
@@ -3216,6 +3222,9 @@ fn waveH(p: vec2f, t: f32) -> f32 {
   var c = mix(body, reflCol, fres);
   let h = normalize(vd + F.sunDir.xyz);
   c += F.sunCol.rgb * pow(max(dot(n, h), 0.0), 320.0) * 6.0 * sh;
+  c += F.sunCol.rgb * pow(max(dot(n, h), 0.0), 48.0) * 0.25 * sh;
+  // light passing through wave crests that face the sun glows turquoise
+  c += vec3f(0.06, 0.3, 0.26) * smoothstep(0.0, 0.25, h0) * max(dot(-vd, F.sunDir.xyz) * 0.5 + 0.5, 0.0) * (1.0 - fres) * sh;
   let fn1 = vnoise(p * 2.2 + vec2f(t * 0.5, -t * 0.3));
   let band = 0.5 + 0.5 * sin(depth * 9.0 - t * 2.2);
   let foam = smoothstep(0.7, 0.0, depth) * smoothstep(0.35, 0.8, fn1 * 0.7 + band * 0.5 + (1.0 - depth * 1.4) * 0.35);
