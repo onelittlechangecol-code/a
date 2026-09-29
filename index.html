@@ -1133,8 +1133,21 @@ function buildHero() {
   P(ellipsoid([0, 1.0, 0], [0.118, 0.14, 0.088], () => HC.tunic, 26, 14), [BI.spine, BI.pelvis, BI.chest]);
   P(transformed(torusMesh(0.064, 0.02, 28, 8, HC.trim), at(0, 1.35, -0.004)), [BI.chest, BI.neck]);
   // folded cowl gathered around the neck
-  P(transformed(torusMesh(0.07, 0.025, 32, 10, HC.tunicDark), M4.scale(at(0, 1.36, -0.01), 1, 0.85, 0.92)), [BI.chest, BI.neck]);
-  P(transformed(torusMesh(0.058, 0.017, 32, 10, V.mul(HC.tunic, 0.9).concat([2])), at(0, 1.387, -0.008)), [BI.neck, BI.chest]);
+  // draped cowl: a soft folded collar, fuller and lower at the front, with irregular folds and shaded valleys
+  for (const [R, r, y, col, bones] of [[0.07, 0.026, 1.36, HC.tunicDark, [BI.chest, BI.neck]], [0.057, 0.018, 1.388, V.mul(HC.tunic, 0.9).concat([2]), [BI.neck, BI.chest]]]) {
+    const m = new Mesh(), NA = 64, NS = 12;
+    for (let i = 0; i <= NA; i++) for (let j = 0; j <= NS; j++) {
+      const a = i / NA * TAU, b = j / NS * TAU, fold = Math.sin(a * 9 + Math.sin(a * 3) * 1.5) * 0.35 + Math.sin(a * 17 + 1) * 0.15;
+      const front = Math.max(0, Math.cos(a)), rr = r * (1 + 0.25 * fold + 0.3 * front), RR = R * (1 + 0.04 * fold);
+      const cx = Math.sin(a) * RR, cz = Math.cos(a) * RR * 0.92 - 0.01, dy = -0.012 * front;
+      const nx = Math.sin(a) * Math.cos(b), ny = Math.sin(b), nz = Math.cos(a) * Math.cos(b);
+      const sh = 0.82 + 0.18 * (fold * 0.5 + 0.5);
+      m.v([cx + nx * rr, y + dy + ny * rr * 0.85, cz + nz * rr], [nx, ny, nz], [col[0] * sh, col[1] * sh, col[2] * sh, 2]);
+    }
+    for (let i = 0; i < NA; i++) for (let j = 0; j < NS; j++) { const q = i * (NS + 1) + j, w = q + NS + 1; m.tri(q, w, q + 1); m.tri(q + 1, w, w + 1); }
+    m.recomputeNormals();
+    P(m, bones);
+  }
   // tunic skirt: blended between pelvis and the thighs so it flares with each stride
   {
     const m = new Mesh(), seg = 64, rings = 9;
