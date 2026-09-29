@@ -3173,8 +3173,17 @@ struct TOut { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1
   let cp = v.wp.xz * 1.3;
   let cau = abs(sin(cp.x + sin(cp.y * 1.3 + ct * 1.1) * 1.4 + ct * 0.6) * sin(cp.y + sin(cp.x * 1.1 - ct * 0.9) * 1.4 - ct * 0.5));
   base += vec3f(0.55, 0.75, 0.7) * pow(1.0 - cau, 6.0) * smoothstep(0.05, -0.4, v.wp.y) * smoothstep(-3.5, -1.0, v.wp.y) * 0.5;
+  // beach: ripple marks on the dry sand, then a dark glistening wet band right at the waterline
+  let above = v.wp.y - F.fogP.z;
+  let beach = clamp((1.6 - above) / 0.6, 0.0, 1.0) * step(-0.2, above);
+  let rip = sin(dot(v.wp.xz, vec2f(0.8, 0.5)) * 9.0 + vnoise(v.wp.xz * 1.5) * 4.0);
+  base *= 1.0 + beach * clamp((above - 0.6) / 0.2, 0.0, 1.0) * rip * 0.09;
+  let wet = clamp((0.62 - above) / 0.22, 0.0, 1.0) * step(-0.2, above);
+  base *= 1.0 - wet * 0.45;
   let sh = shadowAt(v.wp, n);
-  var c = lighting(base, n, v.wp, 0.93, 0.0, sh, 0.0, vec3f(0.0, 1.0, 0.0));
+  var c = lighting(base, n, v.wp, mix(0.93, 0.25, wet), 0.0, sh, 0.0, vec3f(0.0, 1.0, 0.0));
+  let vdir = normalize(F.camPos.xyz - v.wp);
+  c += F.sunCol.rgb * pow(max(dot(n, normalize(vdir + F.sunDir.xyz)), 0.0), 60.0) * wet * sh * 0.5;
   if (F.misc.z > 0.5 && v.wp.y < F.fogP.z - 0.05) { discard; }
   return vec4f(applyFog(c, v.wp), 1.0);
 }
