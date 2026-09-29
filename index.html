@@ -544,7 +544,7 @@ function buildMeshes() {
       for (let u = 0; u <= S; u++) {
         const t = u / S, p = V.add(V.mul(d, r0 + lean * t * t), [0, h * (t - 0.12 * t * t), 0]), ww = w * (1 - t * 0.92);
         const n = V.norm(V.add(V.mul(d, 0.6), [0, 1.2, 0]));
-        const c = V.mul(V.lerp(V.mul(COL.grass, 0.68), COL.grass2, Math.pow(t, 0.7)), tone).concat([8]);
+        const c = V.mul(V.lerp(V.mul(COL.grass, 0.68), COL.grass2, Math.pow(t, 0.7)), tone).concat([17]);
         g.v(V.add(p, V.mul(side, ww)), n, c); g.v(V.sub(p, V.mul(side, ww)), n, c);
       }
       for (let u = 0; u < S; u++) { const q = base + u * 2; g.tri(q, q + 1, q + 2); g.tri(q + 1, q + 3, q + 2); }
@@ -552,10 +552,27 @@ function buildMeshes() {
     M.tuft = g;
   }
   {
-    const fl = new Mesh();
-    fl.merge(cylMesh(5, 0.02, 0.02, 0.42, COL.grass, false));
-    for (let k = 0; k < 5; k++) { const a = k / 5 * TAU; fl.merge(sphereMesh(8, 6, [1, 1, 1]), M4.scale(at(Math.sin(a) * 0.08, 0.44, Math.cos(a) * 0.08), 0.07, 0.03, 0.07)); }
-    fl.merge(sphereMesh(8, 6, COL.hair), M4.scale(at(0, 0.46, 0), 0.05));
+    // wildflower: curved stem, two leaves, seven cupped petals round a domed centre (petal colour comes from the instance tint)
+    const fl = new Mesh(), stemC = [...V.mul(COL.grass, 0.55), 17];
+    const sp = [[0, 0, 0], [0.02, 0.15, 0.01], [0.03, 0.3, 0.0], [0.015, 0.43, -0.01]];
+    for (let k = 0; k < 3; k++) fl.merge(tubeMesh(sp[k], sp[k + 1], () => 0.011, () => stemC, 6, 1));
+    for (const [y, a] of [[0.12, 0.4], [0.22, 3.4]]) {
+      const b0 = fl.vcount, d = [Math.sin(a), 0.35, Math.cos(a)], sd = [Math.cos(a), 0, -Math.sin(a)], base = [0.02, y, 0];
+      for (let u = 0; u <= 4; u++) { const t = u / 4, w = 0.035 * Math.sin(t * Math.PI), p = V.add(base, V.add(V.mul(d, t * 0.16), [0, -0.04 * t * t, 0]));
+        fl.v(V.add(p, V.mul(sd, w)), [0, 1, 0], stemC); fl.v(V.sub(p, V.mul(sd, w)), [0, 1, 0], stemC); }
+      for (let u = 0; u < 4; u++) { const q = b0 + u * 2; fl.tri(q, q + 1, q + 2); fl.tri(q + 1, q + 3, q + 2); }
+    }
+    const top = sp[3];
+    for (let k = 0; k < 7; k++) {
+      const a = k / 7 * TAU, d = [Math.sin(a), 0, Math.cos(a)], sd = [Math.cos(a), 0, -Math.sin(a)], b0 = fl.vcount;
+      for (let u = 0; u <= 4; u++) {
+        const t = u / 4, w = 0.04 * Math.sin(Math.min(1, t * 1.15) * Math.PI) + 0.004, p = V.add(top, V.add(V.mul(d, 0.02 + t * 0.1), [0, 0.012 + 0.035 * t - 0.02 * t * t, 0]));
+        const n = V.norm(V.add([0, 1, 0], V.mul(d, -0.3 * t)));
+        fl.v(V.add(p, V.mul(sd, w)), n, [1, 1, 1, 17]); fl.v(V.sub(p, V.mul(sd, w)), n, [0.96, 0.96, 0.96, 17]);
+      }
+      for (let u = 0; u < 4; u++) { const q = b0 + u * 2; fl.tri(q, q + 1, q + 2); fl.tri(q + 1, q + 3, q + 2); }
+    }
+    fl.merge(ellipsoid(V.add(top, [0, 0.02, 0]), [0.028, 0.018, 0.028], (n0) => V.mul([1.0, 0.78, 0.2], 0.8 + 0.3 * Math.abs(Math.sin(n0[0] * 9) * Math.sin(n0[2] * 9))).concat([2]), 10, 6));
     M.flower = fl;
   }
   const stoneC = (y, shade = 1) => V.mul(V.lerp(COL.moss, COL.stone, smooth(0.0, 0.6, y)), shade).concat([11]);
@@ -2929,6 +2946,7 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
   else if (m == 11) { rough = 0.85; }
   else if (m == 12) { rough = 0.9; sss = 0.25; }
   else if (m == 16) { rough = 0.42; metal = 1.0; }
+  else if (m == 17) { rough = 0.7; sss = 0.55; }
   let v = normalize(F.camPos.xyz - wp); let l = F.sunDir.xyz;
   let nl = dot(n, l);
   // soft wrap for a painterly, forgiving look
@@ -3092,6 +3110,7 @@ fn vnoise3(p: vec3f) -> f32 {
   let isStone = 1.0 - step(0.5, abs(mat - 11.0)) + (1.0 - step(0.5, abs(mat - 14.0))) * 0.4; let isGrass = 1.0 - step(0.5, abs(mat - 12.0));
   let isRune = 1.0 - step(0.5, abs(mat - 13.0)); let isTile = 1.0 - step(0.5, abs(mat - 14.0)); let isPortal = 1.0 - step(0.5, abs(mat - 15.0));
   let isMail = 1.0 - step(0.5, abs(mat - 16.0));
+  let isBlade = 1.0 - step(0.5, abs(mat - 17.0));
   let p = v.lp;
   // fade micro detail out before it can alias
   let fp = length(fwidth(p)) + 1e-6;
@@ -3195,7 +3214,8 @@ fn vnoise3(p: vec3f) -> f32 {
   let fib = 0.8 + 0.2 * sin(ang * 46.0 + vnoise3(p * 9.0) * 6.0) - smoothstep(0.75, 1.0, ir) * 0.35 + smoothstep(0.35, 0.0, ir) * 0.2;
   let colored = clamp((1.0 - dot(base, vec3f(0.33))) * 1.4, 0.0, 1.0);
   base *= mix(1.0, fib, isEye * colored);
-  let sh = shadowAt(v.wp, n);
+  // thin foliage (grass blades, leaves) would self-shadow in stripes: sample the shadow a little off the surface
+  let sh = shadowAt(v.wp + normalize(v.n) * 0.12 * (isLeaf + isBlade), n);
   var c = lighting(base, n, v.wp, v.prm.x, v.prm.y, sh, mat, normalize(v.tng));
   c += base * v.tint.a;
   if (F.misc.z > 0.5 && v.wp.y < F.fogP.z - 0.05) { discard; }
