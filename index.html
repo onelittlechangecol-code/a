@@ -470,6 +470,12 @@ function buildMeshes() {
       const end = [Math.sin(a) * 0.85, y0 + 0.9, Math.cos(a) * 0.85];
       t.merge(tubeMesh([Math.sin(a) * 0.12, y0, Math.cos(a) * 0.12], end, (u) => lerp(0.13, 0.04, u), () => barkDark, 8, 4));
     }
+    // root buttresses spreading into the ground, and a couple of knots on the bark
+    for (let k = 0; k < 5; k++) {
+      const a = k / 5 * TAU + 0.3, d = [Math.sin(a), 0, Math.cos(a)];
+      t.merge(tubeMesh(V.add(V.mul(d, 0.28), [0, 0.55, 0]), V.add(V.mul(d, 0.95), [0, -0.12, 0]), (u) => lerp(0.17, 0.05, u), () => bark, 8, 6, [false, true]));
+    }
+    for (const [y, a] of [[1.1, 0.8], [1.9, 3.6]]) t.merge(ellipsoid([Math.sin(a) * 0.3, y, Math.cos(a) * 0.3], [0.07, 0.09, 0.05], (n0) => (n0[2] > 0.6 ? barkDark : bark), 10, 8));
     M.trunk = t;
   }
   for (let v = 0; v < 3; v++) {
@@ -1003,7 +1009,7 @@ function buildHero() {
   // hair cap: covers crown, back and sides; leaves the face open
   const hc = HB.headC;
   const cap = ellipsoid(V.add(hc, [0, 0.008, -0.006]), [0.123, 0.145, 0.133], (n0) => {
-    const streak = 0.85 + 0.25 * hash2(Math.floor(Math.atan2(n0[0], n0[2]) * 14), 3);
+    const streak = 0.95 + 0.07 * hash2(Math.floor(Math.atan2(n0[0], n0[2]) * 14), 3);
     return V.mul(V.lerp(HC.hairDark, HC.hair, 0.15 + 0.35 * smooth(-0.6, 0.9, n0[1])), streak * 0.85).concat([7]);
   }, 34, 26);
   P(keepTris(cap, (p) => { const q = [(p[0] - hc[0]) / 0.123, (p[1] - hc[1] - 0.008) / 0.145, (p[2] - hc[2] + 0.006) / 0.133]; return q[1] > 0.3 || (q[2] < 0.1 && q[1] > -0.5) || (q[2] < 0.4 && q[1] > 0.05 && Math.abs(q[0]) > 0.7); }), [BI.head]);
@@ -3047,7 +3053,7 @@ fn vnoise3(p: vec3f) -> f32 {
   let pores = vnoise3(p * 1100.0);
   let brushed = vnoise3(vec3f(p.x * 900.0, p.y * 18.0, p.z * 900.0));
   let strands = sin(p.x * 150.0 + vnoise3(vec3f(p.x * 30.0, p.y * 3.0, p.z * 30.0)) * 1.5) * 0.5 + 0.5;
-  let capStr = sin(atan2(p.x, p.z) * 140.0 + vnoise3(p * 60.0) * 2.0) * 0.5 + 0.5;
+  let capStr = sin(atan2(p.x, p.z) * 90.0 + vnoise3(p * 40.0) * 2.0) * 0.5 + 0.5;
   let hairH = mix(strands, capStr, step(1.2, p.y));
   let embH = isEmb * step(p.y, 0.72) * step(0.63, p.y) * (1.0 - smoothstep(0.08, 0.16, abs(abs(fract(atan2(p.x, p.z) * 7.0 / 3.14159) - 0.5) * 2.0 + abs((p.y - 0.676) / 0.02) - 0.75)));
   let leafy = vnoise3(p * 20.0) * 0.6 + vnoise3(p * 52.0) * 0.4;
@@ -3064,7 +3070,7 @@ fn vnoise3(p: vec3f) -> f32 {
         + isLeather * grain * smoothstep(0.006, 0.0015, fp) * 0.0006
         + isSkin * pores * smoothstep(0.0015, 0.0004, fp) * 0.00002
         + isMetal * brushed * 0.00008
-        + isHair * hairH * smoothstep(0.012, 0.003, fp) * 0.0004;
+        + isHair * hairH * smoothstep(0.006, 0.0015, fp) * 0.0004;
   // bump from a height field using screen-space derivatives (no tangents needed)
   let dhx = dpdx(h); let dhy = dpdy(h); let px = dpdx(v.wp); let py = dpdy(v.wp);
   let r1 = cross(py, n); let r2 = cross(n, px); let det = dot(px, r1);
@@ -3122,7 +3128,7 @@ fn vnoise3(p: vec3f) -> f32 {
   if (!ff) { base *= 1.0 - isCape * 0.35; }
   base *= (1.0 + isStone * (stone - 0.5) * 0.5 + isGrass * (turf - 0.5) * 0.4);
   base *= (1.0 + isLeaf * (leafy - 0.5) * 0.45) * (1.0 - isBark * (1.0 - grooves) * 0.35);
-  base *= 1.0 - isCloth * (1.0 - weave) * 0.16 - isLeather * (0.55 - grain) * 0.22 - isHair * (1.0 - hairH) * 0.1;
+  base *= 1.0 - isCloth * (1.0 - weave) * 0.16 - isLeather * (0.55 - grain) * 0.22 - isHair * (1.0 - hairH) * 0.1 * smoothstep(0.006, 0.0015, fp);
   // iris fibres + dark limbal ring (only shows on the coloured part of the eye)
   let ir = length(p.xy); let ang = atan2(p.y, p.x);
   let fib = 0.8 + 0.2 * sin(ang * 46.0 + vnoise3(p * 9.0) * 6.0) - smoothstep(0.75, 1.0, ir) * 0.35 + smoothstep(0.35, 0.0, ir) * 0.2;
