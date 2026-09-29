@@ -498,6 +498,16 @@ function buildMeshes() {
       const a = k / 5 * TAU + 0.3, d = [Math.sin(a), 0, Math.cos(a)];
       t.merge(tubeMesh(V.add(V.mul(d, 0.28), [0, 0.55, 0]), V.add(V.mul(d, 0.95), [0, -0.12, 0]), (u) => lerp(0.17, 0.05, u), () => bark, 8, 6, [false, true]));
     }
+    // gnarl the trunk: twist, lumpy girth and bark ridges in the geometry; moss creeping up one side from the base
+    for (let k = 0; k < t.vcount; k++) {
+      const x = t.p[k * 3], y = t.p[k * 3 + 1], z = t.p[k * 3 + 2], r = Math.hypot(x, z);
+      if (r < 1e-4 || r > 1.2) continue;
+      const a = Math.atan2(z, x) + y * 0.18, lump = 1 + 0.12 * noise3(x * 2.2, y * 1.4, z * 2.2) - 0.06 + 0.035 * Math.abs(Math.sin(a * 11 + noise3(x, y * 3, z) * 3));
+      t.p[k * 3] = Math.cos(a) * r * lump; t.p[k * 3 + 2] = Math.sin(a) * r * lump;
+      const moss = clamp((1.0 - y) / 1.2, 0, 1) * clamp(0.5 + Math.cos(a - 0.6) * 0.8, 0, 1) * (0.6 + 0.5 * noise3(x * 5, y * 5, z * 5));
+      if (moss > 0.35) { const c = V.lerp([t.c[k * 4], t.c[k * 4 + 1], t.c[k * 4 + 2]], COL.moss, Math.min(1, (moss - 0.35) * 2)); t.c[k * 4] = c[0]; t.c[k * 4 + 1] = c[1]; t.c[k * 4 + 2] = c[2]; }
+    }
+    t.recomputeNormals();
     for (const [y, a] of [[1.1, 0.8], [1.9, 3.6]]) t.merge(ellipsoid([Math.sin(a) * 0.3, y, Math.cos(a) * 0.3], [0.07, 0.09, 0.05], (n0) => (n0[2] > 0.6 ? barkDark : bark), 10, 8));
     M.trunk = t;
   }
