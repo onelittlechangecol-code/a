@@ -217,7 +217,7 @@ body.cine .lb{height:11vh}
       <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>Correr (relativo a la cámara)</dd>
       <dt><kbd>Espacio</kbd></dt><dd>Saltar · otra vez: doble salto · mantén: planear con la hoja</dd>
       <dt><kbd>J</kbd> / clic</dt><dd>Espada: combo de 3 golpes · mantén para ataque giratorio</dd>
-      <dt><kbd>Shift</kbd></dt><dd>Voltereta para esquivar · dash en el aire</dd>
+      <dt><kbd>Shift</kbd></dt><dd>Voltereta para esquivar · mantén al correr: esprintar (gasta aguante) · dash en el aire</dd>
       <dt><kbd>K</kbd> / <kbd>Ctrl</kbd></dt><dd>Estocada descendente, en el aire</dd>
       <dt>Ratón / <kbd>Q</kbd><kbd>E</kbd></dt><dd>Cámara · clic en la escena para fijar el ratón</dd>
       <dt><kbd>B</kbd></dt><dd>Ver el esqueleto, la IK y la capa</dd>
@@ -227,14 +227,14 @@ body.cine .lb{height:11vh}
       <dt>Stick der.</dt><dd>Cámara</dd>
       <dt>A</dt><dd>Saltar · doble salto · mantener para planear</dd>
       <dt>X</dt><dd>Espada (mantén para ataque giratorio)</dd>
-      <dt>RB / RT</dt><dd>Voltereta / dash aéreo</dd>
+      <dt>RB / RT</dt><dd>Voltereta / dash aéreo · mantener: esprintar</dd>
       <dt>B</dt><dd>Estocada descendente</dd>
       <dt>Select</dt><dd>Ver esqueleto</dd>
     </dl>
     <dl class="controls" id="ctlTouch" hidden>
       <dt>Izquierda</dt><dd>Arrastra para correr</dd>
       <dt>Derecha</dt><dd>Arrastra para mover la cámara</dd>
-      <dt>Botones</dt><dd>Saltar (mantén para planear), Espada (mantén para girar), Esquivar, Estocada</dd>
+      <dt>Botones</dt><dd>Saltar (mantén para planear), Espada (mantén para girar), Esquivar (mantén para esprintar), Estocada</dd>
     </dl>
 
   </div>
@@ -2574,14 +2574,15 @@ function capeStep(dt, snap, time) {
     rig.capeRest = { h: CAPE.CH, w: [] };
     for (let j = 0; j < H; j++) rig.capeRest.w.push(0.4 / (W - 1) * (1 + 0.6 * Math.pow(j / (H - 1), 0.8)));
   }
-  const C = rig.cape, g = -9.8 * dt * dt, air = [Math.sin(time * 1.4) * 0.5, 0, Math.cos(time * 1.1) * 0.35];
+  // global wind (mod_world.js) pushes the cloth downwind and makes it flutter harder
+  const C = rig.cape, g = -9.8 * dt * dt, air = [Math.sin(time * 1.4) * 0.5 + wind.x * 4, 0, Math.cos(time * 1.1) * 0.35 + wind.z * 4], fl = 1 + wind.strength * 1.5;
   const fwd = R3.v(rig.Rfull, [0, 0, 1]);
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
     const n = C[j * W + i];
     if (j === 0) { n.q = n.p; n.p = pin(i); continue; }
     const vx = (n.p[0] - n.q[0]) * 0.975, vy = (n.p[1] - n.q[1]) * 0.975, vz = (n.p[2] - n.q[2]) * 0.975;
     n.q = n.p.slice();
-    const flutter = Math.sin(time * 9 + i * 1.3 + j * 0.8) * 0.0004 * j;
+    const flutter = Math.sin(time * 9 * (0.8 + wind.strength * 0.4) + i * 1.3 + j * 0.8) * 0.0004 * j * fl;
     n.p = [n.p[0] + vx + air[0] * dt * dt + flutter, n.p[1] + vy + g, n.p[2] + vz + air[2] * dt * dt + flutter];
   }
   const R = rig.capeRest;
@@ -4262,6 +4263,410 @@ function wpnHudFrame(dt) {
 }
 
 // ============================================================
+//  Living world: clock + sky, weather, wind, and the body (stamina, sweat, wet)
+//  Globals for other systems: wind, weather, rainAmount (window properties, live)
+// ============================================================
+const WCLOCK = { hour: 15.5, rate: 24 / 960, frozen: false };      // a full day in 16 real minutes; start mid-afternoon
+const wind = { x: 0.4, z: 0.2, dirX: 0.9, dirZ: 0.45, strength: 0.55, gust: 0, angle: 0.46, phase: 0 };
+const WEATHERS = {
+  clear:  { name: 'Despejado', cover: 0.28, rain: 0,    wind: 0.55, fog: 0,    dark: 0,    dur: [110, 220], next: [['cloudy', 0.75], ['clear', 0.25]] },
+  cloudy: { name: 'Nublado',   cover: 0.64, rain: 0,    wind: 0.9,  fog: 0.08, dark: 0.12, dur: [70, 150],  next: [['rain', 0.5], ['clear', 0.5]] },
+  rain:   { name: 'Lluvia',    cover: 0.86, rain: 0.65, wind: 1.1,  fog: 0.1,  dark: 0.42, dur: [70, 140],  next: [['storm', 0.4], ['cloudy', 0.6]] },
+  storm:  { name: 'Tormenta',  cover: 0.97, rain: 1.0,  wind: 1.9,  fog: 0.14, dark: 0.8,  dur: [45, 100],  next: [['rain', 1]] },
+  fog:    { name: 'Niebla',    cover: 0.42, rain: 0,    wind: 0.18, fog: 1.0,  dark: 0.06, dur: [60, 120],  next: [['clear', 0.8], ['cloudy', 0.2]] },
+};
+const wx = { state: 'clear', t: 150, cover: 0.28, rain: 0, wind: 0.55, fog: 0, dark: 0, wet: 0, flash: 0, strikes: [], nextStrike: 5, fogDay: -1, cloudOff: [0, 0], rainOff: [0, 0, 0] };
+const body = { st: 1, exhausted: false, sprint: false, holdT: 0, regen: 0, pant: 0, exert: 0, sweat: 0, wet: 0, full: 9, held: false, breathT: 0 };
+Object.defineProperty(window, 'wind', { get: () => wind, configurable: true });
+Object.defineProperty(window, 'weather', { get: () => wx.state, configurable: true });
+Object.defineProperty(window, 'rainAmount', { get: () => wx.rain, configurable: true });
+
+// ---------- sky model: sun and moon paths, colour ramps keyed on the sun's elevation ----------
+const SKY_AZ = -21.2 * Math.PI / 180, SKY_E = [Math.cos(SKY_AZ), 0, Math.sin(SKY_AZ)], SKY_S = [-Math.sin(SKY_AZ), 0, Math.cos(SKY_AZ)];
+function celestial(theta, tilt) {
+  const c = Math.cos(theta), s = Math.sin(theta), ct = Math.cos(tilt), st = Math.sin(tilt);
+  return V.norm([SKY_E[0] * c + SKY_S[0] * st * s, ct * s, SKY_E[2] * c + SKY_S[2] * st * s]);
+}
+const sunAt = h => celestial((h - 6) / 12 * Math.PI, 35 * Math.PI / 180);
+const moonAt = h => celestial((h - 6) / 12 * Math.PI + Math.PI + 0.35, 25 * Math.PI / 180);
+function ramp(tab, x) {
+  if (x <= tab[0][0]) return tab[0][1].slice();
+  for (let i = 1; i < tab.length; i++) if (x <= tab[i][0]) {
+    const a = tab[i - 1], b = tab[i], u = (x - a[0]) / (b[0] - a[0]), s = u * u * (3 - 2 * u);
+    return a[1].map((v, k) => v + (b[1][k] - v) * s);
+  }
+  return tab[tab.length - 1][1].slice();
+}
+const SUN_COL = [[-0.05, [0, 0, 0]], [0.0, [1.15, 0.3, 0.08]], [0.04, [1.65, 0.6, 0.22]], [0.1, [1.9, 0.98, 0.48]], [0.2, [1.85, 1.22, 0.76]], [0.46, [1.75, 1.36, 0.98]], [0.8, [1.88, 1.6, 1.26]]];
+const SKY_TOP = [[-0.35, [0.006, 0.012, 0.034]], [-0.18, [0.014, 0.03, 0.08]], [-0.08, [0.025, 0.05, 0.16]], [0.0, [0.07, 0.12, 0.34]], [0.08, [0.12, 0.26, 0.6]], [0.25, [0.15, 0.35, 0.8]], [0.46, [0.16, 0.38, 0.86]], [0.9, [0.13, 0.36, 0.88]]];
+const SKY_HOR = [[-0.35, [0.014, 0.022, 0.045]], [-0.18, [0.035, 0.05, 0.1]], [-0.08, [0.12, 0.12, 0.24]], [0.0, [0.95, 0.36, 0.14]], [0.08, [0.86, 0.66, 0.52]], [0.25, [0.68, 0.75, 0.86]], [0.46, [0.66, 0.78, 0.9]], [0.9, [0.62, 0.77, 0.92]]];
+const GLOW = [[-0.22, [0.3, 0.12, 0.25, 0]], [-0.1, [0.6, 0.22, 0.32, 0.7]], [-0.03, [1.1, 0.34, 0.16, 1.0]], [0.03, [1.45, 0.42, 0.1, 1.0]], [0.1, [1.15, 0.72, 0.42, 0.8]], [0.25, [1.0, 0.8, 0.6, 0.55]], [1, [1.0, 0.8, 0.6, 0.5]]];
+const AMB = [[-0.3, [0.1, 0.12, 0.22]], [-0.12, [0.14, 0.16, 0.28]], [-0.03, [0.36, 0.34, 0.48]], [0.05, [0.8, 0.7, 0.68]], [0.2, [0.95, 0.93, 0.92]], [0.4, [1, 1, 1]]];
+const EXPO = [[-0.3, [1.4]], [-0.12, [1.45]], [-0.03, [1.35]], [0.05, [1.15]], [0.2, [1.02]], [0.4, [1.0]]];
+const SAT = [[-0.3, [0.62]], [-0.08, [0.8]], [0.02, [1.28]], [0.15, [1.15]], [0.4, [1.1]]];
+const luma = c => c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722;
+let WENV = null;
+function worldEnv() {
+  const h = WCLOCK.hour, sun = sunAt(h), moon = moonAt(h), e = sun[1];
+  const night = clamp((-0.03 - e) / 0.15, 0, 1), ov = clamp((wx.cover - 0.35) / 0.55, 0, 1), dark = wx.dark;
+  const mI = clamp(moon[1] / 0.2, 0, 1) * night;
+  const sunUp = e > -0.03;
+  let keyCol = sunUp ? ramp(SUN_COL, e) : [0.13 * mI, 0.18 * mI, 0.33 * mI];
+  const dim = (1 - 0.8 * ov) * (1 - 0.35 * dark);
+  keyCol = keyCol.map(v => v * dim);
+  let key = sunUp ? sun.slice() : moon.slice();
+  if (key[1] < 0.08) { const l = Math.hypot(key[0], key[2]) || 1, k = Math.sqrt(1 - 0.0064) / l; key = [key[0] * k, 0.08, key[2] * k]; }
+  // overcast skies wash toward grey; storms darken them
+  const grey = (c, k, d) => { const l = luma(c); return c.map((v, i) => (v + (l * [0.92, 0.97, 1.06][i] - v) * k) * d); };
+  const skyTop = grey(ramp(SKY_TOP, e), ov * 0.8, 1 - dark * 0.72), skyHor = grey(ramp(SKY_HOR, e), ov * 0.75, 1 - dark * 0.66);
+  const glow = ramp(GLOW, e); glow[3] *= 1 - ov * 0.85;
+  const ambT = ramp(AMB, e), amb = ambT.map(v => v * (1 + ov * 0.15) * (1 - dark * 0.45 * (1 - night * 0.7)));
+  const mist = clamp(1 - Math.abs(h - 6.3) / 1.5, 0, 1);
+  const fog = [0.0042 + wx.fog * 0.03 + wx.rain * 0.0035 + mist * 0.004, 0.05 + wx.fog * 0.1];
+  const lit = keyCol.map((v, i) => (v * 0.55 + skyHor[i] * 0.45) * 0.92 * (1 - night * 0.55));
+  const shade = skyTop.map((v, i) => (v * 0.4 + skyHor[i] * 0.6) * 0.8 + lit[i] * 0.12);
+  const expo = ramp(EXPO, e)[0] * (1 + ov * 0.12) * (1 + dark * night * 0.9);
+  const lamp = clamp((0.1 - e) / 0.16, 0, 1) + dark * 0.5;
+  const flick = 0.85 + 0.1 * Math.sin(state.time * 13.1) + 0.05 * Math.sin(state.time * 31.7);
+  WENV = {
+    hour: h, sun, moon, e, night, ov, key, keyCol, skyTop, skyHor, glow, amb, fog, lit, shade, lamp: Math.min(1, lamp), flick,
+    rays: clamp(e / 0.05, 0, 1) * (1 - ov * 0.9),
+    stars: clamp((-0.06 - e) / 0.14, 0, 1) * (1 - ov * 0.8),
+    moonVis: clamp(moon[1] * 8, 0, 1) * (0.35 + 0.65 * night) * (1 - ov * 0.7),
+    fill: clamp(luma(keyCol) / 1.35 + 0.1, 0.1, 1.0),
+    post: [expo, ramp(SAT, e)[0] * (1 - ov * 0.12), wx.flash, night * 0.85],
+  };
+  return WENV;
+}
+function worldUniforms(f, vp) {
+  const E = WENV || worldEnv();
+  f.set([...E.sun, 0.5 - 0.2 * clamp(1 - Math.abs(E.e + 0.02) / 0.14, 0, 1) * (1 - E.ov)], 104);   // .w: sky gradient exponent (tighter at sunset)
+  f.set([...E.moon, E.moonVis], 108);
+  f.set([wind.dirX, wind.dirZ, wind.strength * (0.75 + 0.5 * wind.gust), wind.phase], 112);
+  f.set([wx.rain, wx.wet, wx.cover, wx.flash], 116);
+  f.set([body.wet, body.sweat, E.stars, E.night], 120);
+  f.set([wx.cloudOff[0], wx.cloudOff[1], wx.dark, E.fill], 124);
+  f.set(E.glow, 128);
+  f.set([SHRINE[0], SHRINE[1] + 2.2, SHRINE[2], E.lamp * 3.2 * E.flick * (state.shrineAwake ? 0.5 : 1)], 132);
+  f.set([...E.amb, wx.rainOff[2]], 136);
+  f.set([...E.lit, wx.rainOff[0]], 140);
+  f.set([...E.shade, wx.rainOff[1]], 144);
+  const Q = QUALITY[state.quality] || QUALITY.alta;
+  GR.rainCount = Math.round(wx.rain * (Q.grass ? 5200 : 2200));
+  GR.splashCount = wx.rain > 0.02 ? 900 : 0;
+  hudStamina(vp);
+}
+// shrine glyphs smoulder amber at night before the shrine wakes
+function worldRuneTint(pl) {
+  const E = WENV; if (!E || E.lamp <= 0.01) return [0.35, 0.4, 0.45, 0];
+  const k = E.lamp, f = E.flick * (0.9 + 0.1 * Math.sin(state.time * 2 + pl.a * 3));
+  return [lerp(0.35, 1.0, k), lerp(0.4, 0.6, k), lerp(0.45, 0.28, k), k * 1.7 * f];
+}
+
+// ---------- weather state machine ----------
+function pickNext(list) { let r = Math.random(); for (const [n, w] of list) { if ((r -= w) <= 0) return n; } return list[0][0]; }
+function setWeather(name, instant = true) {
+  if (!WEATHERS[name]) return;
+  const W = WEATHERS[name];
+  wx.state = name; wx.t = rand(W.dur[0], W.dur[1]);
+  if (instant) {
+    Object.assign(wx, { cover: W.cover, rain: W.rain, wind: W.wind, fog: W.fog, dark: W.dark });
+    wx.wet = W.rain > 0 ? Math.max(wx.wet, 0.4 + 0.6 * W.rain) : wx.wet;
+    if (W.rain > 0) body.wet = Math.max(body.wet, 0.8 * W.rain + 0.2);
+    wx.nextStrike = 1.5;
+  }
+  hudClock(true);
+}
+function lightning(now) {
+  wx.strikes.push([now, 1], [now + 0.09, 0.45], [now + 0.2, 0.8 + Math.random() * 0.4]);
+  const delay = rand(0.5, 3.2);
+  noise(3.2, 0.5, 110, 'lowpass', delay); noise(0.45, 0.28, 800, 'bandpass', delay); tone('sine', 58, 28, 2.4, 0.22, delay, 0.05);
+  noise(2.2, 0.25, 260, 'lowpass', delay + 0.5);
+}
+function worldStep(dt) {
+  if (!WCLOCK.frozen) WCLOCK.hour = (WCLOCK.hour + dt * WCLOCK.rate) % 24;
+  const h = WCLOCK.hour, day = Math.floor(state.time / 960);
+  // state transitions; mist likes to settle at dawn
+  wx.t -= dt;
+  if ((wx.state === 'clear' || wx.state === 'cloudy') && h > 4.5 && h < 6.5 && wx.fogDay !== day) { wx.fogDay = day; if (Math.random() < 0.55) setWeather('fog', false); }
+  if (wx.t <= 0) setWeather(pickNext(WEATHERS[wx.state].next), false);
+  const W = WEATHERS[wx.state], k = 1 - Math.exp(-dt / 22);
+  wx.cover += (W.cover - wx.cover) * k; wx.dark += (W.dark - wx.dark) * k; wx.fog += (W.fog - wx.fog) * k; wx.wind += (W.wind - wx.wind) * k;
+  // rain waits for the clouds to gather, and eases off first
+  const rT = wx.cover > 0.72 ? W.rain : 0;
+  wx.rain += (rT - wx.rain) * (1 - Math.exp(-dt / 14));
+  if (wx.rain < 1e-3 && rT === 0) wx.rain = 0;
+  // ground wetness soaks up quickly and dries slowly (faster in the sun)
+  const E = WENV || worldEnv(), sunDry = clamp(E.e * 3, 0, 1) * (1 - E.ov);
+  wx.wet = clamp(wx.wet + (wx.rain > 0.05 ? wx.rain * 0.1 : -(0.006 + 0.02 * sunDry)) * dt, 0, 1);
+  // wind: slowly wandering direction, strength follows the weather, gusts on top
+  const t = state.time;
+  wind.angle += (Math.sin(t * 0.021) * 0.02 + Math.sin(t * 0.0071 + 2) * 0.012) * dt * 3;
+  wind.gust = clamp(0.5 + 0.35 * Math.sin(t * 0.37) * Math.sin(t * 0.13 + 1) + 0.25 * Math.sin(t * 1.1 + Math.sin(t * 0.3) * 2) * (wx.wind > 1.2 ? 1 : 0.5), 0, 1);
+  wind.strength = wx.wind;
+  wind.dirX = Math.cos(wind.angle); wind.dirZ = Math.sin(wind.angle);
+  const ws = wind.strength * (0.6 + 0.8 * wind.gust);
+  wind.x = wind.dirX * ws; wind.z = wind.dirZ * ws;
+  wind.phase += dt * (0.7 + wind.strength * 1.3);
+  wx.cloudOff[0] += wind.dirX * (0.004 + 0.009 * wind.strength) * dt; wx.cloudOff[1] += wind.dirZ * (0.004 + 0.009 * wind.strength) * dt;
+  // rain drop offset: falling plus wind drift, wrapped to the rain box
+  const RB = [36, 22, 36], rv = [wind.dirX * wind.strength * 3.5, -15, wind.dirZ * wind.strength * 3.5];
+  for (let i = 0; i < 3; i++) { wx.rainOff[i] += rv[i] * dt; wx.rainOff[i] -= Math.floor(wx.rainOff[i] / RB[i]) * RB[i]; }
+  // lightning in storms
+  if (wx.state === 'storm' && wx.rain > 0.5) { wx.nextStrike -= dt; if (wx.nextStrike <= 0) { lightning(t); wx.nextStrike = rand(4, 13); } }
+  let fl = 0;
+  for (const [t0, a] of wx.strikes) if (t >= t0) fl += a * Math.exp(-(t - t0) * 16);
+  wx.strikes = wx.strikes.filter(s => t - s[0] < 1.2);
+  wx.flash = Math.min(1.5, fl);
+  // hero: rain soaks hair, skin and clothes; the sun dries them
+  body.wet = clamp(body.wet + (wx.rain > 0.05 ? wx.rain * 0.16 : -(0.008 + 0.02 * sunDry)) * dt, 0, 1);
+  const heat = clamp((E.e - 0.45) / 0.3, 0, 1) * (1 - E.ov);
+  body.exert = clamp(body.exert - dt * (0.012 + 0.02 * (wx.rain > 0.1 ? 1 : 0)), 0, 1);
+  const sweatT = clamp(body.exert * 1.3 + heat * 0.45 * (player.onGround && Math.hypot(player.vel[0], player.vel[2]) > 2 ? 1 : 0.4), 0, 1);
+  body.sweat += (sweatT - body.sweat) * (1 - Math.exp(-dt / (sweatT > body.sweat ? 8 : 25)));
+}
+
+// ---------- body: stamina, sprint, exhaustion ----------
+const STAM = { SPRINT: 0.125, GLIDE: 0.085, SWIM: 0.07, REGEN: 0.32, REGEN_EX: 0.2, DELAY: 0.7, HOLD: 0.25, SPRINT_MUL: 1.45, TIRED_MUL: 0.6 };
+function bodyStep(dt, inp) {
+  const p = player;
+  body.holdT = body.held && state.mode === 'play' ? body.holdT + dt : 0;
+  const mag = Math.hypot(inp.mx, inp.mz);
+  body.sprint = body.holdT > STAM.HOLD && mag > 0.3 && !body.exhausted && body.st > 0 && p.rollT <= 0 && p.dashT <= 0 && !p.atk.n && !p.charging && p.deadT <= 0 && (p.onGround || body.sprint);
+  let drain = 0;
+  if (body.sprint && p.onGround) drain += STAM.SPRINT;
+  if (p.glide) drain += STAM.GLIDE;
+  if (p.swimming) drain += mag > 0.1 ? STAM.SWIM : STAM.SWIM * 0.4;
+  if (drain > 0) { body.st -= drain * dt; body.regen = STAM.DELAY; body.exert = Math.min(1, body.exert + dt * 0.035); }
+  if (body.st <= 0) { body.st = 0; if (!body.exhausted) { body.exhausted = true; body.sprint = false; tone('sine', 300, 180, 0.3, 0.05); } }
+  if (drain <= 0 && (p.onGround || p.deadT > 0)) { body.regen -= dt; if (body.regen <= 0) body.st += (body.exhausted ? STAM.REGEN_EX : STAM.REGEN) * dt; }
+  if (body.st >= 1) { body.st = 1; if (body.exhausted) { body.exhausted = false; tone('triangle', 660, 880, 0.15, 0.04); } }
+  body.pant = damp(body.pant, body.exhausted ? 1 : 0, body.exhausted ? 3 : 0.8, dt);
+  if (body.exhausted && !p.onGround && p.jumps >= 1) inp.jumpHeld = false;     // too tired to open the glider
+  return p.onGround ? (body.sprint ? STAM.SPRINT_MUL : (body.exhausted ? STAM.TIRED_MUL : 1)) : (body.sprint ? STAM.SPRINT_MUL : 1);
+}
+const _playerStepW = playerStep;
+playerStep = function (dt, inp) {
+  const mul = bodyStep(dt, inp), run0 = TUNE.RUN;
+  TUNE.RUN = run0 * mul;
+  try { _playerStepW(dt, inp); } finally { TUNE.RUN = run0; }
+  const p = player;
+  if (body.sprint && p.onGround && Math.hypot(p.vel[0], p.vel[2]) > 8) {
+    if (Math.random() < dt * 14) dust(p.pos, 1, 0.8);
+    if (!reduceMotion) cam.fovKick = Math.max(cam.fovKick, 3.5);
+  }
+};
+// exhausted: bent over, chest and shoulders heaving, head bobbing with each breath
+const _computePoseW = computePose;
+computePose = function (st, t) {
+  const o = _computePoseW(st, t), k = body.pant;
+  if (k > 0.02 && (st === 'idle' || st === 'run')) {
+    const b = Math.sin(t * 7.8), b2 = Math.max(0, b);
+    o.breath += (0.04 + 0.05 * b) * k;
+    o.pel[1] += (-0.03 + b * 0.012) * k;
+    o.lean += (st === 'idle' ? 0.34 : 0.12) * k;
+    if (st === 'idle' && o.sword !== 'guard') { o.hl = V.lerp(o.hl, [0.2, 0.58 + b2 * 0.02, 0.24], k * 0.85); o.hr = V.lerp(o.hr, [-0.2, 0.58 + b2 * 0.02, 0.24], k * 0.85); }
+    else { o.hl = V.add(o.hl, [0, b2 * 0.03 * k, 0]); o.hr = V.add(o.hr, [0, b2 * 0.03 * k, 0]); }
+    o.mouth = Math.max(o.mouth, (0.55 + 0.3 * b2) * k);
+    o.lookOff = [0, 0.2 * k + b * 0.05 * k];
+  }
+  return o;
+};
+const _simStepW = simStep;
+simStep = function (dt, inp) { worldStep(dt); _simStepW(dt, inp); };
+
+// ---------- per-frame: input polling, particles, audio, HUD ----------
+let rainAudio = null;
+function worldAudio() {
+  if (!AC || !noiseBuf) return;
+  if (!rainAudio) {
+    const mk = (type, f, q) => { const s = AC.createBufferSource(); s.buffer = noiseBuf; s.loop = true; const b = AC.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; const g = AC.createGain(); g.gain.value = 0; s.connect(b); b.connect(g); g.connect(master); s.start(0, Math.random()); return g; };
+    rainAudio = { rain: mk('highpass', 1600, 0.5), patter: mk('bandpass', 4200, 0.8), wind: mk('bandpass', 420, 0.6) };
+  }
+  const t = AC.currentTime;
+  rainAudio.rain.gain.setTargetAtTime(wx.rain * 0.09, t, 0.3);
+  rainAudio.patter.gain.setTargetAtTime(wx.rain * 0.035 * (0.7 + 0.3 * Math.random()), t, 0.1);
+  rainAudio.wind.gain.setTargetAtTime(Math.max(0, wind.strength - 0.4) * 0.05 * (0.5 + wind.gust), t, 0.4);
+}
+function worldFrame(dt) {
+  if (window.__brio && !window.__brio.world) window.__brio.world = WORLD_API;
+  // dash button held (keyboard, touch or pad shoulder/trigger) decides tap-dodge vs sprint
+  let held = !!keys.dash || !!input.touchBtn.dash;
+  if (!held && navigator.getGamepads) for (const gp of navigator.getGamepads()) { if (!gp) continue; const b = i => gp.buttons[i] && (gp.buttons[i].pressed || gp.buttons[i].value > 0.5); if (b(5) || b(7)) held = true; }
+  body.held = held;
+  const E = WENV || worldEnv(), p = player.pos;
+  // braziers on the shrine pillars burn from dusk to dawn
+  if (E.lamp > 0.05 && Math.hypot(p[0] - SHRINE[0], p[2] - SHRINE[2]) < 70) {
+    for (const pl of WORLD.pillars) {
+      if (Math.random() < dt * 14 * E.lamp) particle([pl.x + rand(-0.12, 0.12), SHRINE[1] + 5.1, pl.z + rand(-0.12, 0.12)], [wind.x * 0.4 + rand(-0.1, 0.1), rand(0.9, 1.6), wind.z * 0.4 + rand(-0.1, 0.1)], rand(0.35, 0.7), rand(0.1, 0.2), [2.2, 0.75, 0.16, 0.5], -1.5, 1.2, -0.18);
+      if (Math.random() < dt * 3 * E.lamp) particle([pl.x, SHRINE[1] + 5.2, pl.z], [wind.x + rand(-0.4, 0.4), rand(1.5, 3), wind.z + rand(-0.4, 0.4)], rand(0.8, 1.6), 0.025, [2.6, 1.0, 0.25, 1], -0.4, 0.6);
+    }
+  }
+  // fireflies drift over the meadow on clear nights
+  if (E.night > 0.4 && wx.rain < 0.1 && Math.random() < dt * 6 * E.night) {
+    const a = rand(0, TAU), r = rand(3, 16), x = p[0] + Math.sin(a) * r, z = p[2] + Math.cos(a) * r, y = heightAt(x, z);
+    if (y > WORLD.water + 0.3) particle([x, y + rand(0.3, 1.5), z], [rand(-0.3, 0.3), rand(-0.05, 0.2), rand(-0.3, 0.3)], rand(1.5, 3), rand(0.03, 0.05), [1.4, 2.4, 0.5, 1], 0, 0.3);
+  }
+  // exhausted panting
+  if (body.pant > 0.5 && state.mode === 'play') { body.breathT -= dt; if (body.breathT <= 0) { body.breathT = 0.4; noise(0.28, 0.03, 1100, 'bandpass', 0, 1.2); } }
+  worldAudio();
+  hudClock(false);
+}
+const _ambientW = ambientParticles;
+ambientParticles = function (dt) { _ambientW(dt); worldFrame(dt); };
+
+// ---------- HUD: sun/moon dial and the stamina wheel ----------
+const HUDW = { clock: null, stam: null, lastMin: -1 };
+function hudInit() {
+  if (HUDW.clock || !document.querySelector('.hud-r')) return;
+  const css = document.createElement('style');
+  css.textContent = `
+.wclock{display:flex;align-items:center;gap:8px;background:rgba(12,14,28,.62);border:1px solid rgba(201,163,90,.5);border-radius:999px;padding:3px 13px 3px 3px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);box-shadow:inset 0 0 0 1px rgba(255,220,150,.06)}
+.wclock svg{width:40px;height:40px;display:block}
+.wclock .wt{display:flex;flex-direction:column;line-height:1.05}
+.wclock b{font-family:'Cinzel',serif;font-weight:700;font-size:15px;letter-spacing:.08em;color:#f5e6c4;font-variant-numeric:tabular-nums}
+.wclock small{font-family:'Cinzel',serif;font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:#c9a35a;margin-top:2px}
+#stamina{position:fixed;left:0;top:0;width:46px;height:46px;margin:-23px 0 0 -23px;z-index:4;pointer-events:none;opacity:0;transition:opacity .45s}
+#stamina.on{opacity:1}
+#stamina circle{fill:none;stroke-linecap:round}
+#stamina .bg{stroke:rgba(10,14,24,.55);stroke-width:7}
+#stamina .fg{stroke:#8be35a;stroke-width:4.6;filter:drop-shadow(0 0 3px rgba(140,230,90,.55));transition:stroke .3s}
+#stamina.tired .fg{stroke:#ff7a3d;filter:drop-shadow(0 0 3px rgba(255,110,50,.6))}
+#stamina.tired svg{animation:stamPulse .6s ease-in-out infinite}
+@keyframes stamPulse{50%{transform:scale(1.08)}}`;
+  document.head.appendChild(css);
+  const c = document.createElement('div');
+  c.className = 'wclock'; c.id = 'wclock'; c.setAttribute('role', 'img');
+  c.innerHTML = `<svg viewBox="-24 -24 48 48" aria-hidden="true">
+<defs><clipPath id="wcTop"><rect x="-24" y="-24" width="48" height="24"/></clipPath>
+<radialGradient id="wcSunG"><stop offset="0" stop-color="#fff6d8"/><stop offset=".55" stop-color="#ffd36a"/><stop offset="1" stop-color="#d9901c"/></radialGradient></defs>
+<circle r="22.5" fill="#0d1022" stroke="#c9a35a" stroke-width="1.1"/>
+<g clip-path="url(#wcTop)"><circle id="wcSky" r="21" fill="#3a6fb8"/>
+<g id="wcRot"><g stroke="#ffd36a" stroke-width="1" opacity=".85"><path d="M0 -21.5v2.5M0 -6.5v-2.5M7.5 -14h-2.5M-7.5 -14h2.5M5.3 -19.3l-1.7 1.7M-5.3 -8.7l1.7 -1.7M5.3 -8.7l-1.7 -1.7M-5.3 -19.3l1.7 1.7"/></g>
+<circle cy="-14" r="4.3" fill="url(#wcSunG)"/>
+<circle cy="14" r="4" fill="#e8e6f2"/><circle cx="1.8" cy="12.8" r="3.5" fill="#1b2140" id="wcMoonCut"/></g></g>
+<path d="M-21 0 A21 21 0 0 0 21 0 Z" fill="#141730"/>
+<g stroke="#c9a35a" stroke-width=".8" opacity=".7"><path d="M0 3v3M-10.5 1.5l1.2 2.6M10.5 1.5l-1.2 2.6M-18 .5l2.2 1.6M18 .5l-2.2 1.6"/></g>
+<line x1="-22" y1="0" x2="22" y2="0" stroke="#e6c27a" stroke-width="1.1"/>
+<circle r="1.3" fill="#e6c27a"/></svg><div class="wt"><b id="wcTime">15:30</b><small id="wcWx">Despejado</small></div>`;
+  const hr = document.querySelector('.hud-r');
+  hr.insertBefore(c, hr.firstChild);
+  const s = document.createElement('div');
+  s.id = 'stamina'; s.setAttribute('aria-hidden', 'true');
+  s.innerHTML = '<svg viewBox="0 0 46 46"><circle class="bg" cx="23" cy="23" r="17"/><circle class="fg" cx="23" cy="23" r="17" transform="rotate(-90 23 23)" stroke-dasharray="106.8 106.8" stroke-dashoffset="0"/></svg>';
+  document.body.appendChild(s);
+  HUDW.clock = c; HUDW.stam = s; HUDW.fg = s.querySelector('.fg');
+  HUDW.rot = c.querySelector('#wcRot'); HUDW.sky = c.querySelector('#wcSky'); HUDW.time = c.querySelector('#wcTime'); HUDW.wx = c.querySelector('#wcWx');
+  hudClock(true);
+}
+function hudClock(force) {
+  if (!HUDW.clock) { hudInit(); if (!HUDW.clock) return; }
+  const h = WCLOCK.hour, min = Math.floor(h * 60);
+  if (!force && min === HUDW.lastMin) return;
+  HUDW.lastMin = min;
+  const hh = Math.floor(h), mm = Math.floor((h - hh) * 60);
+  const txt = String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+  HUDW.time.textContent = txt; HUDW.wx.textContent = WEATHERS[wx.state].name;
+  HUDW.rot.setAttribute('transform', `rotate(${((h - 12) / 24 * 360).toFixed(1)})`);
+  const E = WENV || worldEnv(), tm = c => Math.round(255 * Math.pow(clamp(c * E.post[0] * 1.1 / (1 + c * E.post[0] * 1.1), 0, 1), 1 / 2.2));
+  const sc = V.lerp(E.skyTop, E.skyHor, 0.35);
+  HUDW.sky.setAttribute('fill', `rgb(${tm(sc[0])},${tm(sc[1])},${tm(sc[2])})`);
+  HUDW.clock.setAttribute('aria-label', `Hora ${txt}, ${WEATHERS[wx.state].name}`);
+}
+function hudStamina(vp) {
+  const s = HUDW.stam; if (!s) return;
+  body.full = body.st >= 1 ? body.full + 1 / 60 : 0;
+  const show = state.mode === 'play' && !player.hidden && body.full < 0.8;
+  s.classList.toggle('on', show);
+  s.classList.toggle('tired', body.exhausted);
+  if (!show && !s.classList.contains('on')) return;
+  const q = V.add(player.pos, [0, 1.25, 0]);
+  const cx = vp[0] * q[0] + vp[4] * q[1] + vp[8] * q[2] + vp[12], cy = vp[1] * q[0] + vp[5] * q[1] + vp[9] * q[2] + vp[13], cw = vp[3] * q[0] + vp[7] * q[1] + vp[11] * q[2] + vp[15];
+  if (cw <= 0) return;
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  const x = (cx / cw * 0.5 + 0.5) * W + Math.min(90, 260 / cw) + 18, y = (0.5 - cy / cw * 0.5) * H;
+  s.style.transform = `translate(${x.toFixed(1)}px,${y.toFixed(1)}px)`;
+  HUDW.fg.setAttribute('stroke-dashoffset', (106.8 * (1 - body.st)).toFixed(2));
+}
+
+// ---------- test / debug hooks (window.__brio.world) ----------
+const WORLD_API = {
+  setTime(h) { WCLOCK.hour = ((h % 24) + 24) % 24; worldEnv(); hudClock(true); },
+  setWeather, freeze(on = true) { WCLOCK.frozen = on; },
+  get hour() { return WCLOCK.hour; }, get weather() { return wx.state; }, get rain() { return wx.rain; },
+  wx, wind, body, clock: WCLOCK, env: () => WENV,
+};
+
+// ---------- GPU rain: instanced streaks around the camera + ground splashes (no CPU per drop) ----------
+const WGSL_WORLD = /* wgsl */`
+struct ROut { @builtin(position) pos: vec4f, @location(0) uv: vec2f, @location(1) a: f32, @location(2) @interpolate(flat) kind: f32 };
+@vertex fn vsRain(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> ROut {
+  var corners = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
+  let c = corners[vi];
+  let fi = f32(ii);
+  let h1 = hash2(vec2f(fi * 0.1371, 1.37)); let h2 = hash2(vec2f(fi * 0.2913, 7.13)); let h3 = hash2(vec2f(fi * 0.0719, 3.71));
+  let size = vec3f(36.0, 22.0, 36.0);
+  let vel = vec3f(F.wWind.x, 0.0, F.wWind.y) * F.wWind.z * 3.5 + vec3f(0.0, -15.0, 0.0);
+  let base = F.camPos.xyz - size * vec3f(0.5, 0.45, 0.5);
+  // world-anchored drops (shared fall + drift offset integrated on the CPU) wrapped into a box around the camera
+  let p0 = vec3f(h1, h3, h2) * size + vec3f(F.wCL.w, F.wCS.w, F.wAmb.w);
+  let rel = p0 - base;
+  let wp0 = base + rel - size * floor(rel / size);
+  let ax = normalize(vel);
+  let toC = F.camPos.xyz - wp0; let dist = max(length(toC), 1e-3);
+  let side = normalize(cross(ax, toC / dist));
+  let len = 0.3 + 0.25 * h1;
+  let wid = 0.007 + dist * 0.0011;
+  let wp = wp0 + side * c.x * wid + ax * c.y * len;
+  var o: ROut; o.pos = F.viewProj * vec4f(wp, 1.0); o.uv = c; o.kind = 0.0;
+  o.a = clamp((dist - 1.2) / 2.5, 0.0, 1.0) * clamp((19.0 - dist) / 6.0, 0.0, 1.0) * (0.15 + 0.1 * h2) * clamp(F.wWx.x * 3.0, 0.0, 1.0);
+  return o;
+}
+fn rainLight() -> vec3f { return F.skyHor.rgb * 0.35 + F.sunCol.rgb * 0.08 + F.wAmb.rgb * 0.18 + vec3f(2.5, 2.6, 3.0) * F.wWx.w; }
+@fragment fn fsRain(v: ROut) -> @location(0) vec4f {
+  let a = v.a * (1.0 - v.uv.x * v.uv.x) * clamp(1.0 - abs(v.uv.y), 0.0, 1.0) * (0.6 + 0.4 * (v.uv.y * 0.5 + 0.5));
+  return vec4f(rainLight() * a, a);
+}
+@vertex fn vsSplash(@builtin(vertex_index) viIn: u32, @builtin(instance_index) ii: u32) -> ROut {
+  var corners = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
+  let crown = viIn >= 6u; let c = corners[viIn % 6u];
+  // a grid of world cells around the camera; each cell throws one splash per cycle at a fresh random spot
+  let cs = 1.2;
+  let g = vec2f(f32(ii % 30u), f32(ii / 30u)) - 15.0;
+  let cell = floor(F.camPos.xz / cs) + g;
+  let rate = 1.4 + hash2(cell * 0.37 + vec2f(2.1, 0.0)) * 0.9;
+  let cyc = F.camPos.w * rate + hash2(cell * 0.93 + vec2f(5.3, 1.0));
+  let k = floor(cyc); let ph = fract(cyc);
+  let r1 = hash2(cell + vec2f(k * 1.7, 9.1)); let r2 = hash2(cell + vec2f(4.4, k * 0.71));
+  let on = step(hash2(cell + vec2f(k * 0.113, 2.9)), F.wWx.x * 0.8);
+  let xz = (cell + vec2f(r1, r2)) * cs;
+  let gy = heightAtTex(xz);
+  let vis = on * step(F.fogP.z + 0.1, gy) * clamp((17.0 - distance(xz, F.camPos.xz)) / 5.0, 0.0, 1.0);
+  var wp: vec3f;
+  var o: ROut;
+  if (crown) {
+    let hgt = 0.07 * sin(ph * 3.14159) + 0.01; let w = 0.03 + ph * 0.05;
+    let rt = normalize(vec3f(F.camRight.x, 0.0, F.camRight.z));
+    wp = vec3f(xz.x, gy + 0.02, xz.y) + rt * c.x * w + vec3f(0.0, (c.y * 0.5 + 0.5) * hgt, 0.0);
+    o.kind = 1.0; o.a = vis * (1.0 - ph) * 0.4;
+  } else {
+    let r = 0.02 + ph * 0.1;
+    wp = vec3f(xz.x + c.x * r, gy + 0.025, xz.y + c.y * r);
+    o.kind = 0.0; o.a = -vis * (1.0 - ph) * 0.4;
+  }
+  o.pos = F.viewProj * vec4f(wp, 1.0); o.uv = c;
+  return o;
+}
+@fragment fn fsSplash(v: ROut) -> @location(0) vec4f {
+  let r = length(v.uv);
+  var a: f32;
+  if (v.kind > 0.5) { a = clamp(1.0 - abs(v.uv.x), 0.0, 1.0) * clamp(v.uv.y * 0.5 + 0.5, 0.0, 1.0) * clamp((1.0 - v.uv.y) * 2.0, 0.0, 1.0) * v.a; }
+  else { a = clamp(1.0 - abs(r - 0.8) / 0.18, 0.0, 1.0) * -v.a; }
+  return vec4f(rainLight() * 1.3 * a, a);
+}
+`;
+
+// ============================================================
 //  Renderer: WebGPU + WGSL
 // ============================================================
 const WGSL_COMMON = /* wgsl */`
@@ -4270,6 +4675,8 @@ struct Frame {
   viewProj: mat4x4f, invViewProj: mat4x4f, lightVP: mat4x4f,
   camPos: vec4f, sunDir: vec4f, sunCol: vec4f, skyTop: vec4f, skyHor: vec4f,
   fogP: vec4f, res: vec4f, misc: vec4f, camRight: vec4f, camUp: vec4f, lightVP2: mat4x4f,
+  // living world (mod_world.js): true sun/moon, wind, weather, body wetness, clouds, glow, warm light, ambient
+  wSun: vec4f, wMoon: vec4f, wWind: vec4f, wWx: vec4f, wHero: vec4f, wCloud: vec4f, wGlow: vec4f, wLight: vec4f, wAmb: vec4f, wCL: vec4f, wCS: vec4f,
 };
 @group(0) @binding(0) var<uniform> F: Frame;
 
@@ -4284,9 +4691,11 @@ fn fbm(p: vec2f) -> f32 {
   return s / 0.9375;
 }
 fn windOffset(wp: vec3f, h: f32, amp: f32) -> vec3f {
-  let t = F.camPos.w;
-  let gust = 0.6 + 0.4 * sin(t * 0.7 + wp.x * 0.05);
-  return vec3f(sin(t * 1.7 + wp.z * 0.35 + wp.x * 0.2), 0.0, cos(t * 1.3 + wp.x * 0.3)) * amp * h * gust;
+  // global wind: a flutter plus a push along the wind direction in gusts travelling downwind
+  let t = F.camPos.w; let wd = F.wWind.xy; let ws = F.wWind.z;
+  let gust = 0.5 + 0.5 * sin(dot(wp.xz, wd) * 0.12 - F.wWind.w * 1.2);
+  let flut = vec3f(sin(t * (1.2 + ws) + wp.z * 0.35 + wp.x * 0.2), 0.0, cos(t * (1.0 + ws * 0.8) + wp.x * 0.3));
+  return (flut * (0.3 + 0.45 * ws) + vec3f(wd.x, 0.0, wd.y) * (0.3 + gust) * ws) * amp * h;
 }
 struct VIn {
   @location(0) pos: vec3f, @location(1) nrm: vec3f, @location(2) col: vec4f,
@@ -4311,12 +4720,13 @@ const WGSL_SCENE = WGSL_COMMON + /* wgsl */`
 
 fn skyColor(d: vec3f) -> vec3f {
   let t = clamp(d.y, 0.0, 1.0);
-  let sd = max(dot(d, F.sunDir.xyz), 0.0);
-  // warm the horizon on the sun's side
-  let hor = mix(F.skyHor.rgb, vec3f(1.0, 0.8, 0.6), pow(sd, 3.0) * 0.55 * (1.0 - t));
-  var c = mix(hor, F.skyTop.rgb, pow(t, 0.5));
-  c += F.sunCol.rgb * (pow(sd, 6.0) * 0.22 + pow(sd, 90.0) * 0.8);
-  c = mix(c, F.skyHor.rgb * vec3f(0.92, 0.97, 1.0), smoothstep(0.0, -0.25, d.y));
+  // warm the horizon on the (true) sun's side: golden by day, red at sunset, a violet afterglow at dusk
+  let sd = max(dot(d, F.wSun.xyz), 0.0);
+  let hor = mix(F.skyHor.rgb, F.wGlow.rgb, clamp((pow(sd, 3.0) * 0.8 + pow(sd, 1.2) * 0.25) * F.wGlow.w * (1.0 - t), 0.0, 1.0));
+  var c = mix(hor, F.skyTop.rgb, pow(t, F.wSun.w));
+  let kd = max(dot(d, F.sunDir.xyz), 0.0);
+  c += F.sunCol.rgb * (pow(kd, 6.0) * 0.22 + pow(kd, 90.0) * 0.8) * (1.0 - F.wWx.z * 0.6);
+  c = mix(c, F.skyHor.rgb * vec3f(0.92, 0.97, 1.0), clamp(-d.y * 4.0, 0.0, 1.0));
   return c;
 }
 fn applyFog(c: vec3f, wp: vec3f) -> vec3f {
@@ -4353,8 +4763,9 @@ fn shadowAt(wp: vec3f, n: vec3f) -> f32 {
   s2 /= 25.0;
   let w2 = smoothstep(0.0, 0.12, min(min(uv2.x, 1.0 - uv2.x), min(uv2.y, 1.0 - uv2.y))) * step(q.z, 1.0) * step(0.0, q.z);
   // drifting cloud shadows, projected along the sun direction
-  let cxz = (wp.xz - F.sunDir.xz / max(F.sunDir.y, 0.2) * wp.y) * 0.018 + vec2f(F.camPos.w * 0.01, F.camPos.w * 0.004);
-  let cloud = smoothstep(0.42, 0.58, fbm(cxz));
+  let cxz = (wp.xz - F.sunDir.xz / max(F.sunDir.y, 0.2) * wp.y) * 0.018 + F.wCloud.xy * 1.25;
+  let cth = 0.5 + (0.3 - F.wWx.z) * 0.6;
+  let cloud = clamp((fbm(cxz) - cth + 0.08) / 0.16, 0.0, 1.0);
   return mix(s1, min(s1 + 0.25, s2), w2) * (1.0 - 0.5 * cloud);
 }
 fn ggx(n: vec3f, v: vec3f, l: vec3f, rough: f32) -> f32 {
@@ -4367,7 +4778,7 @@ fn ggx(n: vec3f, v: vec3f, l: vec3f, rough: f32) -> f32 {
   return D * G / (4.0 * nv + 0.001);
 }
 // material ids (vertex colour alpha): 1 skin, 2 cloth, 3 leather, 4 steel, 5 gold, 6 eye, 7 hair, 8 foliage
-fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, mat: f32, tng: vec3f) -> vec3f {
+fn lighting(baseIn: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, mat: f32, tng: vec3f) -> vec3f {
   var rough = roughIn; var metal = 0.0; var sss = 0.0; var sheen = 0.0;
   let m = i32(mat + 0.5);
   if (m == 1) { rough = 0.48; sss = 1.0; }
@@ -4384,11 +4795,19 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
   else if (m == 16) { rough = 0.42; metal = 1.0; }
   else if (m == 17) { rough = 0.7; sss = 0.55; }
   else if (m == 18) { rough = 0.12; sss = 0.3; }
+  // wetness: rain soaks the world (wWx.y) and the hero (wHero.x); sweat glazes the skin (wHero.y)
+  var wk = 0.0;
+  if (m == 10 || m == 11 || m == 13 || m == 14) { wk = F.wWx.y; }
+  else if (m == 8 || m == 12 || m == 17) { wk = F.wWx.y * 0.45; }
+  else if (m == 2 || m == 3 || m == 7 || m == 9) { wk = F.wHero.x; }
+  else if (m == 1) { wk = max(F.wHero.x * 0.8, F.wHero.y); }
+  let base = baseIn * (1.0 - wk * select(0.34, 0.1, m == 1));
+  rough = mix(rough, max(rough * 0.3, 0.1), wk); sheen *= 1.0 - wk * 0.7;
   let v = normalize(F.camPos.xyz - wp); let l = F.sunDir.xyz;
   let nl = dot(n, l);
   // soft wrap for a painterly, forgiving look
   let wrap = clamp((nl + 0.25) / 1.25, 0.0, 1.0);
-  let hemi = mix(vec3f(0.4, 0.34, 0.27), F.skyTop.rgb * 1.05 + vec3f(0.1, 0.12, 0.16), n.y * 0.5 + 0.5);
+  let hemi = mix(vec3f(0.4, 0.34, 0.27), F.skyTop.rgb * 1.05 + vec3f(0.1, 0.12, 0.16), n.y * 0.5 + 0.5) * F.wAmb.rgb;
   let nv = max(dot(n, v), 0.0);
   let F0 = mix(vec3f(0.04), base, metal);
   let fres = F0 + (vec3f(1.0) - F0) * pow(1.0 - nv, 5.0);
@@ -4410,22 +4829,22 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
     let d1 = dot(t1, hv); let d2 = dot(t2, hv);
     let s1 = pow(sqrt(max(1.0 - d1 * d1, 0.0)), 90.0); let s2 = pow(sqrt(max(1.0 - d2 * d2, 0.0)), 22.0);
     let lit = smoothstep(-0.1, 0.3, nl) * sh * F.sunDir.w;
-    c += F.sunCol.rgb * (s1 * 0.3 + s2 * base * 0.7) * lit;
+    c += F.sunCol.rgb * (s1 * 0.3 * (1.0 + wk * 2.0) + s2 * base * 0.7) * lit;
   } else {
     c += F.sunCol.rgb * ggx(n, v, l, rough) * sh * F.sunDir.w * fres * (1.0 - rough * 0.4);
   }
   // reflections: sky above the horizon, sunlit grass-and-earth below it, dimmed in shadow
   let rd = reflect(-v, n);
-  let ground = vec3f(0.2, 0.24, 0.11) * (F.sunCol.rgb * 0.55 * F.sunDir.w + vec3f(0.35, 0.38, 0.42));
+  let ground = vec3f(0.2, 0.24, 0.11) * (F.sunCol.rgb * 0.55 * F.sunDir.w + vec3f(0.35, 0.38, 0.42) * F.wAmb.rgb);
   let env = mix(skyColor(rd), ground, smoothstep(0.03, -0.1, rd.y)) * mix(0.5, 1.0, sh);
   if (m == 1 || m == 6) {
     // character key light: soft, warm, from above and to one side of the camera, so faces keep their modelling
     let up = vec3f(0.0, 1.0, 0.0); let rt = normalize(cross(up, v));
     let kd = normalize(v * 0.3 + up * 0.6 - rt * 0.85);
     let kw = smoothstep(-0.75, 1.0, dot(n, kd));
-    c += base * vec3f(1.0, 0.9, 0.78) * kw * 0.45 * F.sunDir.w;
+    c += base * vec3f(1.0, 0.9, 0.78) * kw * 0.45 * F.wCloud.w;
     c -= base * amb * 0.12 * (1.0 - kw);
-    c += vec3f(1.0, 0.92, 0.82) * ggx(n, v, kd, max(rough, 0.3)) * 0.02 * F.sunDir.w;
+    c += vec3f(1.0, 0.92, 0.82) * ggx(n, v, kd, max(rough, 0.3)) * 0.02 * F.wCloud.w;
   }
   if (m == 1) {
     // skin: a tight wet sheen over the broad lobe, and soft peach-fuzz scattering at grazing angles
@@ -4436,6 +4855,14 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
   c += env * fres * mix(0.3 * (1.0 - rough), 0.85, metal) * select(1.0, 0.3, m == 16);
   c += sheen * pow(1.0 - nv, 4.0) * base * (F.skyHor.rgb * 0.9 + F.sunCol.rgb * 0.3);
   c += rim * pow(1.0 - nv, 3.0) * (F.skyHor.rgb * 0.55 + F.sunCol.rgb * 0.35 * max(sh, 0.4));
+  // wet glaze: a tight clear-coat highlight over soaked or sweaty surfaces
+  c += (F.sunCol.rgb * ggx(n, v, l, 0.12) * sh + vec3f(0.5, 0.55, 0.7) * F.wMoon.w * ggx(n, v, F.wMoon.xyz, 0.14)) * wk * select(0.06, 0.16, m == 1);
+  // lightning: a cold flash from the sky
+  c += base * F.wWx.w * vec3f(1.6, 1.7, 2.1) * (0.55 + 0.45 * n.y);
+  // warm firelight from the shrine braziers at night
+  let lv = F.wLight.xyz - wp; let ld = length(lv);
+  let li = F.wLight.w * clamp(1.0 - ld / 20.0, 0.0, 1.0) / (1.0 + ld * ld * 0.06);
+  c += base * vec3f(1.0, 0.5, 0.18) * li * clamp(dot(n, lv / max(ld, 1e-3)) * 0.75 + 0.25, 0.0, 1.0);
   return c;
 }
 
@@ -4451,24 +4878,52 @@ struct FOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
   let b = F.invViewProj * vec4f(ndc, 0.0, 1.0);
   let d = normalize(a.xyz / a.w - b.xyz / b.w);
   var c = skyColor(d);
+  var cm = 0.0;
+  // night: stars, a faint milky band and the moon, all hidden behind the clouds drawn over them
+  if (F.wHero.z > 0.001 && d.y > -0.05) {
+    let sp = d * 260.0; let sc = floor(sp); let sh = hash3(sc);
+    let jit = vec3f(hash3(sc + 3.1), hash3(sc + 7.7), hash3(sc + 1.3));
+    let sdist = length(sp - sc - jit);
+    let twk = 0.65 + 0.35 * sin(F.camPos.w * (2.0 + sh * 5.0) + sh * 40.0);
+    let star = step(0.985, sh) * clamp(1.0 - sdist / (0.12 + 0.2 * fract(sh * 91.0)), 0.0, 1.0) * twk;
+    let band = fbm(vec2f(atan2(d.x, d.z) * 2.0, d.y * 7.0 - d.x * 3.0)) * exp(-pow((d.y - 0.55 * d.x - 0.2) * 3.2, 2.0));
+    let starCol = mix(vec3f(0.75, 0.85, 1.2), vec3f(1.2, 1.0, 0.8), fract(sh * 37.0));
+    c += (starCol * star * 2.4 + vec3f(0.05, 0.06, 0.1) * band) * F.wHero.z * clamp(d.y * 6.0 + 0.3, 0.0, 1.0);
+  }
+  let md = dot(d, F.wMoon.xyz);
+  if (md > 0.99) {
+    let mdisc = clamp((md - 0.99955) / 0.00006, 0.0, 1.0);
+    let mq = (d - F.wMoon.xyz * md) * 600.0;
+    let mare = 0.72 + 0.28 * fbm(mq.xy * 0.9 + mq.z * 0.7 + vec2f(5.0, 2.0));
+    c = mix(c, vec3f(1.9, 1.95, 2.1) * mare, mdisc * clamp(F.wMoon.y * 12.0 + 0.4, 0.0, 1.0) * F.wMoon.w);
+  }
+  c += vec3f(0.3, 0.36, 0.5) * (pow(max(md, 0.0), 900.0) * 0.5 + pow(max(md, 0.0), 40.0) * 0.06) * F.wMoon.w * F.wHero.w;
   if (d.y > 0.0) {
-    let uv = d.xz / (d.y + 0.12) * 1.4 + vec2f(F.camPos.w * 0.008, F.camPos.w * 0.003);
+    let uv = d.xz / (d.y + 0.12) * 1.4 + F.wCloud.xy;
+    let cov = F.wWx.z; let dark = F.wCloud.z;
     // high wispy cirrus streaks
     let ci = fbm(vec2f(uv.x * 0.35 + uv.y * 0.2, uv.y * 2.4) * 0.8 + vec2f(3.1, 7.7));
-    c = mix(c, vec3f(1.02, 1.0, 0.98), smoothstep(0.55, 0.8, ci) * smoothstep(0.05, 0.4, d.y) * 0.28);
-    // cumulus: density with a detail octave, self-shadowed by marching a step toward the sun
+    c = mix(c, F.wCL.rgb * 0.95, smoothstep(0.55, 0.8, ci) * smoothstep(0.05, 0.4, d.y) * 0.28 * (1.0 - cov * 0.5));
+    // cumulus: density with a detail octave, self-shadowed by marching a step toward the sun; weather sets the cover
     let cl = fbm(uv * 1.3) + 0.22 * fbm(uv * 4.3) - 0.11;
     let so = normalize(F.sunDir.xz + vec2f(1e-4)) * 0.16;
     let cls = fbm((uv + so) * 1.3) + 0.22 * fbm((uv + so) * 4.3) - 0.11;
-    let m = smoothstep(0.5, 0.78, cl) * smoothstep(0.0, 0.3, d.y);
-    let light = clamp(0.55 + (cl - cls) * 3.5, 0.0, 1.0);
+    let lo = 0.5 + (0.3 - cov) * 0.6;
+    let m = clamp((cl - lo) / 0.28, 0.0, 1.0) * clamp(d.y / 0.3, 0.0, 1.0);
+    cm = m * m * (3.0 - 2.0 * m);
+    let light = clamp(0.55 + (cl - cls) * 3.5 * (1.0 - dark * 0.6), 0.0, 1.0);
     let sunG = pow(max(dot(d, F.sunDir.xyz), 0.0), 4.0);
-    var shade = mix(vec3f(0.6, 0.64, 0.76), vec3f(1.12, 1.06, 0.97), light) * (0.85 + 0.35 * sunG);
+    var shade = mix(F.wCS.rgb, F.wCL.rgb, light) * (0.85 + 0.35 * sunG);
+    // heavy storm decks darken toward their thick bellies
+    shade *= 1.0 - dark * clamp((cl - lo) * 1.6, 0.0, 0.75);
     // silver lining: thin edges glow when the sun sits behind them
-    shade += F.sunCol.rgb * sunG * 0.6 * (1.0 - smoothstep(0.5, 0.62, cl));
-    c = mix(c, shade, m * 0.92);
+    shade += F.sunCol.rgb * sunG * 0.6 * (1.0 - clamp((cl - lo) / 0.12, 0.0, 1.0)) * (1.0 - dark);
+    // lightning lights the cloud deck from inside
+    shade += vec3f(2.2, 2.3, 2.8) * F.wWx.w * (0.4 + 0.6 * fbm(uv * 3.0 + F.camPos.w));
+    c = mix(c, shade, cm * mix(0.92, 1.0, cov));
   }
-  c += F.sunCol.rgb * smoothstep(0.9990, 0.9996, dot(d, F.sunDir.xyz)) * 14.0;
+  c += vec3f(0.5, 0.52, 0.6) * F.wWx.w * 0.6;
+  c += F.sunCol.rgb * smoothstep(0.9990, 0.9996, dot(d, F.wSun.xyz)) * 14.0 * step(-0.03, F.wSun.y) * (1.0 - cm);
   // distant islands and ranges on the horizon: two hazy layers, only in some directions
   let az = atan2(d.x, d.z);
   for (var L = 0; L < 2; L++) {
@@ -4476,7 +4931,7 @@ struct FOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
     let mask = smoothstep(0.3, 0.42, fbm(vec2f(az * 0.9 + fl * 5.3, 2.0 + fl)));
     let ridge = (0.02 + 0.07 * fbm(vec2f(az * (6.0 + fl * 5.0), fl * 3.0)) + 0.02 * fbm(vec2f(az * 22.0, fl))) * mask * (1.0 - fl * 0.45);
     let inM = step(d.y, ridge) * step(-0.02, d.y);
-    let haze = mix(vec3f(0.44, 0.55, 0.68), F.skyHor.rgb, 0.45 + fl * 0.3) * (0.9 + 0.2 * smoothstep(0.0, ridge + 1e-4, d.y));
+    let haze = mix(vec3f(0.44, 0.55, 0.68) * F.wAmb.rgb, F.skyHor.rgb, 0.45 + fl * 0.3 + F.wWx.z * 0.3) * (0.9 + 0.2 * smoothstep(0.0, ridge + 1e-4, d.y));
     c = mix(c, haze, inM * (0.85 - fl * 0.25));
   }
   return vec4f(c, 1.0);
@@ -4535,10 +4990,28 @@ struct TOut { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1
   base *= 1.0 + beach * clamp((above - 0.6) / 0.2, 0.0, 1.0) * rip * 0.09;
   let wet = clamp((0.62 - above) / 0.22, 0.0, 1.0) * step(-0.2, above);
   base *= 1.0 - wet * 0.45;
+  // rain: soaked darker ground, glossier, and still puddles pooling on flat ground and in the path ruts
+  let rw = F.wWx.y * step(0.0, above);
+  var rough = mix(0.93, 0.25, wet);
+  var pud = 0.0;
+  if (rw > 0.001) {
+    let flatG = clamp((n.y - 0.9) / 0.07, 0.0, 1.0);
+    pud = clamp((fbm(v.wp.xz * 0.6 + vec2f(4.0, 1.0)) + dirt * 0.25 - 0.66) / 0.07, 0.0, 1.0) * flatG * clamp((rw - 0.25) / 0.45, 0.0, 1.0) * (1.0 - beach);
+    base *= (1.0 - rw * 0.3 * (1.0 - rockW * 0.3)) * (1.0 - pud * 0.35);
+    rough = mix(mix(rough, 0.32, rw * 0.85), 0.03, pud);
+    // raindrop rings on the puddles
+    let rp = rainRipple(v.wp.xz, F.camPos.w) * F.wWx.x;
+    n = normalize(mix(n, vec3f(0.0, 1.0, 0.0), pud) + vec3f(rp.x, 0.0, rp.y) * pud * 0.5);
+  }
   let sh = shadowAt(v.wp, n);
-  var c = lighting(base, n, v.wp, mix(0.93, 0.25, wet), 0.0, sh, 0.0, vec3f(0.0, 1.0, 0.0));
+  var c = lighting(base, n, v.wp, rough, 0.0, sh, 0.0, vec3f(0.0, 1.0, 0.0));
   let vdir = normalize(F.camPos.xyz - v.wp);
-  c += F.sunCol.rgb * pow(max(dot(n, normalize(vdir + F.sunDir.xyz)), 0.0), 60.0) * wet * sh * 0.5;
+  c += F.sunCol.rgb * pow(max(dot(n, normalize(vdir + F.sunDir.xyz)), 0.0), 60.0) * max(wet, pud) * sh * 0.5;
+  if (pud > 0.0) {
+    // puddle sheen: a mirror of the sky, strongest at grazing angles
+    let pf = 0.04 + 0.96 * pow(1.0 - max(dot(n, vdir), 0.0), 5.0);
+    c = mix(c, skyColor(reflect(-vdir, n)) * 0.55, pud * pf * 0.6 / (1.0 + distance(v.wp, F.camPos.xyz) * 0.02));
+  }
   if (F.misc.z > 0.5 && v.wp.y < F.fogP.z - 0.05) { discard; }
   return vec4f(applyFog(c, v.wp), 1.0);
 }
@@ -4553,17 +5026,20 @@ struct VOut {
   var wp = meshWorld(i);
   // wind: blades and petals sway in travelling gusts (more at the tips); canopies roll slowly
   let tw = F.camPos.w; let mid = i32(i.col.a + 0.5);
+  let wd = F.wWind.xy; let ws = F.wWind.z;
   if (mid == 17) {
-    let gust = 0.5 + 0.5 * sin(dot(wp.xz, vec2f(0.21, 0.13)) - tw * 1.3);
-    let sway = (sin(tw * 2.1 + wp.x * 0.7 + wp.z * 0.5) * 0.6 + gust * 0.9) * i.pos.y * i.pos.y * 0.12;
-    wp += vec3f(sway, -abs(sway) * 0.25, sway * 0.45);
+    // gusts roll across the meadow downwind (global wind: direction, strength, travelling phase)
+    let gust = 0.5 + 0.5 * sin(dot(wp.xz, wd) * 0.25 - F.wWind.w * 1.3 + sin(dot(wp.xz, vec2f(-wd.y, wd.x)) * 0.08) * 1.5);
+    let flick = sin(tw * 2.1 * (0.7 + 0.5 * ws) + wp.x * 0.7 + wp.z * 0.5) * (0.3 + 0.35 * ws);
+    let sway = min(flick + gust * gust * 1.5 * ws, 2.2) * i.pos.y * i.pos.y * 0.12;
+    wp += vec3f(wd.x * sway, -abs(sway) * 0.25, wd.y * sway);
     // blades part around the hero and flatten underfoot
     let dh = wp.xz - vec2f(F.camRight.w, F.camUp.w); let dl = length(dh);
     let push = smoothstep(1.1, 0.25, dl) * i.pos.y;
     wp += vec3f(dh.x / max(dl, 0.05) * push * 0.35, -push * 0.3, dh.y / max(dl, 0.05) * push * 0.35);
   } else if (mid == 8) {
-    let roll = sin(tw * 0.8 + wp.x * 0.15 + wp.z * 0.11) * 0.025 * max(i.pos.y + 0.5, 0.0);
-    wp += vec3f(roll, 0.0, roll * 0.6);
+    let roll = (sin(tw * (0.6 + ws * 0.5) + wp.x * 0.15 + wp.z * 0.11) * (0.5 + ws * 0.5) + ws * 0.6) * 0.025 * max(i.pos.y + 0.5, 0.0);
+    wp += vec3f(wd.x * roll, 0.0, wd.y * roll);
   }
   let s2 = vec3f(dot(i.m0.xyz, i.m0.xyz), dot(i.m1.xyz, i.m1.xyz), dot(i.m2.xyz, i.m2.xyz));
   let n = normalize(mat3x3f(i.m0.xyz, i.m1.xyz, i.m2.xyz) * (i.nrm / max(s2, vec3f(1e-10))));
@@ -4717,6 +5193,19 @@ fn heightAtTex(xz: vec2f) -> f32 {
   let c = textureLoad(heightTex, i + vec2i(0, 1), 0).r; let d = textureLoad(heightTex, i + vec2i(1, 1), 0).r;
   return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
+// rain rings: one drop per cell per cycle (jittered centre and phase); returns a normal tilt in xz
+fn rainRipple(pIn: vec2f, t: f32) -> vec2f {
+  let g = pIn * 1.7; let id = floor(g); let f = fract(g) - 0.5;
+  let h = hash2(id); let h2 = hash2(id + vec2f(17.3, 5.1));
+  let cyc = t * 1.3 + h;
+  let ph = fract(cyc);
+  let on = step(hash2(id + vec2f(floor(cyc), 3.3)), F.wWx.x * 0.9 + 0.1);
+  let c = vec2f(h2 - 0.5, fract(h * 7.13) - 0.5) * 0.4;
+  let dv = f - c; let d = length(dv);
+  let r = ph * 0.42;
+  let ring = sin((d - r) * 45.0) * exp(-abs(d - r) * 28.0) * (1.0 - ph) * on;
+  return dv / max(d, 1e-3) * ring;
+}
 fn waveH(p: vec2f, t: f32) -> f32 {
   return sin(p.x * 0.35 + t * 0.9) * 0.5 + sin(p.y * 0.42 - t * 1.1) * 0.4 + sin((p.x + p.y) * 0.8 + t * 1.7) * 0.18
     + (vnoise(p * 0.9 + vec2f(t * 0.4, t * 0.3)) - 0.5) * 0.7 + (vnoise(p * 2.3 - vec2f(t * 0.6, 0.0)) - 0.5) * 0.3;
@@ -4737,6 +5226,11 @@ fn waveH(p: vec2f, t: f32) -> f32 {
   let rx = vnoise(q1 + vec2f(e2, 0.0)) + 0.5 * vnoise(q2 + vec2f(e2 * 2.2, 0.0));
   let rz = vnoise(q1 + vec2f(0.0, e2)) + 0.5 * vnoise(q2 + vec2f(0.0, e2 * 2.2));
   n = normalize(n + vec3f(-(rx - r0), 0.0, -(rz - r0)) * ra / e2);
+  // rain: expanding drop rings, fading out with distance
+  if (F.wWx.x > 0.001) {
+    let rp = (rainRipple(p, t) + rainRipple(p * 0.77 + vec2f(3.7, 1.9), t * 1.13)) * F.wWx.x / (1.0 + dist * 0.08);
+    n = normalize(n + vec3f(rp.x, 0.0, rp.y) * 0.6);
+  }
   let depth = max(-heightAtTex(p), 0.0);
   let vd = normalize(F.camPos.xyz - v.wp);
   let fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, vd), 0.0), 5.0);
@@ -4762,7 +5256,7 @@ fn waveH(p: vec2f, t: f32) -> f32 {
   let net = clamp(1.0 - min(lace1, lace2) * 6.0, 0.0, 1.0);
   let near = clamp((0.9 - depth) / 0.9, 0.0, 1.0);
   let foam = max(wash * (0.75 + 0.25 * fn1), net * near * 0.9);
-  c = mix(c, vec3f(1.0), clamp(foam, 0.0, 1.0) * 0.9);
+  c = mix(c, F.wAmb.rgb * 0.78 + F.sunCol.rgb * 0.2 + F.wWx.w * 2.0, clamp(foam, 0.0, 1.0) * 0.9);
   let alpha = clamp(mix(0.3, 0.95, smoothstep(0.0, 2.4, depth)) + fres * 0.25 + foam, 0.0, 1.0);
   c = applyFog(c, v.wp);
   return vec4f(c * alpha, alpha);
@@ -4777,7 +5271,9 @@ struct POut { @builtin(position) pos: vec4f, @location(0) uv: vec2f, @location(1
   var wp: vec3f; var ring = 0.0;
   if (i.col.a < 0.0) { ring = 1.0; wp = i.ps.xyz + vec3f(c.x, 0.0, c.y) * i.ps.w; }
   else { wp = i.ps.xyz + (F.camRight.xyz * c.x + F.camUp.xyz * c.y) * i.ps.w; }
-  var o: POut; o.pos = F.viewProj * vec4f(wp, 1.0); o.uv = c; o.col = vec4f(i.col.rgb, abs(i.col.a)); o.ring = ring; return o;
+  // plain particles (dust, spray: colours up to 1) take the scene light; hotter ones (sparks, motes) glow on their own
+  let lit = select(vec3f(1.0), F.wAmb.rgb * 0.7 + F.sunCol.rgb * 0.22 + F.wWx.w * 1.5, max(i.col.r, max(i.col.g, i.col.b)) <= 1.001);
+  var o: POut; o.pos = F.viewProj * vec4f(wp, 1.0); o.uv = c; o.col = vec4f(i.col.rgb * lit, abs(i.col.a)); o.ring = ring; return o;
 }
 @fragment fn fsPart(v: POut) -> @location(0) vec4f {
   let r = length(v.uv);
@@ -4794,7 +5290,7 @@ struct LOut { @builtin(position) pos: vec4f, @location(0) col: vec4f };
 @vertex fn vsLine(i: LIn) -> LOut { var o: LOut; o.pos = F.viewProj * vec4f(i.pos, 1.0); o.col = i.col; return o; }
 @fragment fn fsLine(v: LOut) -> @location(0) vec4f { return vec4f(v.col.rgb * 1.6, 1.0); }
 @fragment fn fsTrail(v: LOut) -> @location(0) vec4f { return vec4f(v.col.rgb * v.col.a, v.col.a); }
-`;
+` + WGSL_WORLD;
 
 const WGSL_SHADOW = WGSL_COMMON + /* wgsl */`
 @vertex fn vsShadowMesh(i: VIn) -> @builtin(position) vec4f { return F.lightVP * vec4f(meshWorld(i), 1.0); }
@@ -4833,7 +5329,7 @@ fn blur(uv: vec2f, dir: vec2f) -> vec4f {
 @fragment fn fsBlurH(v: FOut) -> @location(0) vec4f { return blur(v.uv, vec2f(1.0, 0.0)); }
 @fragment fn fsBlurV(v: FOut) -> @location(0) vec4f { return blur(v.uv, vec2f(0.0, 1.0)); }
 fn aces(x: vec3f) -> vec3f { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), vec3f(0.0), vec3f(1.0)); }
-struct Post { sun: vec4f };
+struct Post { sun: vec4f, fx: vec4f };
 @group(0) @binding(3) var<uniform> PU: Post;
 @fragment fn fsFinal(v: FOut) -> @location(0) vec4f {
   // slight chromatic fringe toward the frame edges
@@ -4857,10 +5353,12 @@ struct Post { sun: vec4f };
   }
   let falloff = 1.0 - smoothstep(0.0, 0.9, length(toSun * vec2f(PU.sun.w, 1.0)));
   c += rays * 0.032 * PU.sun.z * falloff * vec3f(1.0, 0.92, 0.78);
-  c *= 0.95;
+  // exposure tracks the time of day; night vision loses colour and drifts blue
+  c *= 0.95 * PU.fx.x;
   c = aces(c);
   let l = dot(c, vec3f(0.2126, 0.7152, 0.0722));
-  c = mix(vec3f(l), c, 1.1);
+  c = mix(vec3f(l), c, PU.fx.y);
+  c *= mix(vec3f(1.0), vec3f(0.86, 0.95, 1.16), PU.fx.w);
   // split toning: cool shadows, warm highlights
   c *= mix(vec3f(0.94, 0.98, 1.06), vec3f(1.05, 1.0, 0.93), smoothstep(0.05, 0.85, l));
   c *= 1.0 - dot(q, q) * 0.42;
@@ -4876,7 +5374,7 @@ const QUALITY = {
   media: { label: 'Media', dpr: 1.25, maxPix: 1920 * 1080, refl: true, fine: true, grass: true },
   baja: { label: 'Baja', dpr: 1, maxPix: 1280 * 720, refl: false, fine: false, grass: false },
 };
-const FRAME_FLOATS = 104;
+const FRAME_FLOATS = 148;
 const INST_FLOATS = 24;
 
 async function initRenderer(meshes) {
@@ -4960,7 +5458,7 @@ async function initRenderer(meshes) {
     { binding: 0, visibility: VF, buffer: { type: 'uniform' } },
     { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'depth' } },
     { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'comparison' } },
-    { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+    { binding: 3, visibility: VF, texture: { sampleType: 'unfilterable-float' } },
     { binding: 4, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'depth' } },
     { binding: 5, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
     { binding: 6, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
@@ -5015,6 +5513,8 @@ async function initRenderer(meshes) {
   GR.pPart = P('vsPart', 'fsPart', [vP], { blend: premul, depth: depthRO });
   GR.pTrail = P('vsLine', 'fsTrail', [vL], { blend: premul, depth: depthRO });
   GR.pLine = P('vsLine', 'fsLine', [vL], { topology: 'line-list', depth: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'always' } });
+  GR.pRain = P('vsRain', 'fsRain', [], { blend: premul, depth: depthRO });
+  GR.pSplash = P('vsSplash', 'fsSplash', [], { blend: premul, depth: depthRO });
   const SP = (vs, buffers) => device.createRenderPipeline({
     layout: shadowPL, vertex: { module: shadowMod, entryPoint: vs, buffers },
     primitive: { topology: 'triangle-list', cullMode: 'none' },
@@ -5058,7 +5558,7 @@ function resizeTargets() {
   GR.bgBright = bg(GR.pBright, [{ binding: 0, resource: GR.hdr.createView() }, { binding: 1, resource: GR.linSampler }]);
   GR.bgBlurH = bg(GR.pBlurH, [{ binding: 0, resource: GR.bloomA.createView() }, { binding: 1, resource: GR.linSampler }]);
   GR.bgBlurV = bg(GR.pBlurV, [{ binding: 0, resource: GR.bloomB.createView() }, { binding: 1, resource: GR.linSampler }]);
-  if (!GR.postUB) GR.postUB = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  if (!GR.postUB) GR.postUB = d.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   GR.bgFinal = bg(GR.pFinal, [{ binding: 0, resource: GR.hdr.createView() }, { binding: 1, resource: GR.linSampler }, { binding: 2, resource: GR.bloomA.createView() }, { binding: 3, resource: { buffer: GR.postUB } }]);
 }
 
@@ -5111,9 +5611,10 @@ function buildStaticInstances() {
 // ============================================================
 //  Per-frame scene assembly
 // ============================================================
-const SUN = V.norm([-0.5, 0.46, 0.62]);
+let SUN = V.norm([-0.5, 0.46, 0.62]);   // key light (sun by day, moon by night), set by the world clock
 function frameUniforms() {
-  const f = GR.frameData, asp = GR.w / GR.h;
+  const f = GR.frameData, asp = GR.w / GR.h, E = worldEnv();
+  SUN = E.key;
   const proj = M4.perspective(cam.curFov * Math.PI / 180, asp, 0.1, 900);
   const view = M4.lookAt(cam.pos, cam.target, [0, 1, 0]);
   const vp = M4.mul(proj, view);
@@ -5127,10 +5628,10 @@ function frameUniforms() {
   f.set(vp, 0); f.set(M4.invert(vp), 16); f.set(lvp, 32);
   f.set([...cam.pos, state.time], 48);
   f.set([...SUN, 1.0], 52);
-  f.set([1.75, 1.36, 0.98, 0], 56);         // golden afternoon sun
-  f.set([0.16, 0.38, 0.86, 0], 60);          // sky zenith
-  f.set([0.66, 0.78, 0.9, 0], 64);          // horizon haze
-  f.set([0.0042, 0.05, WORLD.water, state.shrineAwake ? 1 : 0], 68);
+  f.set([...E.keyCol, 0], 56);               // sun / moon colour
+  f.set([...E.skyTop, 0], 60);               // sky zenith
+  f.set([...E.skyHor, 0], 64);               // horizon haze
+  f.set([E.fog[0], E.fog[1], WORLD.water, state.shrineAwake ? 1 : 0], 68);
   f.set([GR.w, GR.h, 1 / GR.w, 1 / GR.h], 72);
   f.set([WORLD.size, WORLD.n, 0, 1], 76);
   f.set([view[0], view[4], view[8], player.pos[0]], 80);   // .w: hero x (grass push)
@@ -5139,6 +5640,7 @@ function frameUniforms() {
   c2[0] = Math.round(c2[0] / unit2) * unit2; c2[1] = Math.round(c2[1] / unit2) * unit2;
   if (QUALITY[state.quality].fine) f.set(M4.mul(M4.ortho(c2[0] - ext2, c2[0] + ext2, c2[1] - ext2, c2[1] + ext2, -c2[2] - 40, -c2[2] + 40), lv), 88);
   else { const off = new Float32Array(16); off[12] = 10; off[15] = 1; f.set(off, 88); }  // fine cascade off: every lookup lands outside it
+  worldUniforms(f, vp);
   GR.device.queue.writeBuffer(GR.frameUB, 0, f);
   // mirrored camera for the water reflection (reflect across the water plane, clip below it)
   const mirror = M4.id(); mirror[5] = -1; mirror[13] = 2 * WORLD.water;
@@ -5152,7 +5654,7 @@ function frameUniforms() {
   const sp = V.add(cam.pos, V.mul(SUN, 500));
   const cx = vp[0] * sp[0] + vp[4] * sp[1] + vp[8] * sp[2] + vp[12], cy = vp[1] * sp[0] + vp[5] * sp[1] + vp[9] * sp[2] + vp[13], cw = vp[3] * sp[0] + vp[7] * sp[1] + vp[11] * sp[2] + vp[15];
   const vis = cw > 0 ? clamp(V.dot(V.norm(V.sub(cam.target, cam.pos)), SUN) * 2.5, 0, 1) : 0;
-  GR.device.queue.writeBuffer(GR.postUB, 0, new Float32Array([cw > 0 ? cx / cw * 0.5 + 0.5 : 0.5, cw > 0 ? 0.5 - cy / cw * 0.5 : -1, vis, asp]));
+  GR.device.queue.writeBuffer(GR.postUB, 0, new Float32Array([cw > 0 ? cx / cw * 0.5 + 0.5 : 0.5, cw > 0 ? 0.5 - cy / cw * 0.5 : -1, vis * E.rays, asp, ...E.post]));
 }
 
 function buildDynamic() {
@@ -5174,7 +5676,7 @@ function buildDynamic() {
   const glow = state.shrineAwake ? 2.4 + Math.sin(t * 3) * 0.6 : 0.0;
   for (const pl of WORLD.pillars) {
     const m = at(pl.x + Math.sin(pl.a) * 0.47, SHRINE[1] + 2.4, pl.z + Math.cos(pl.a) * 0.47); M4.rotY(m, pl.a);
-    L.add('rune', m, state.shrineAwake ? [0.45, 1.0, 1.0, glow] : [0.35, 0.4, 0.45, 0], [0.4, 0, 0, 0]);
+    L.add('rune', m, state.shrineAwake ? [0.45, 1.0, 1.0, glow] : worldRuneTint(pl), [0.4, 0, 0, 0]);
   }
   if (state.shrineAwake) {
     const d = at(SHRINE[0], SHRINE[1] + 0.8 + 2.6, SHRINE[2]); M4.rotX(d, Math.PI / 2); M4.rotY(d, t * 0.8); M4.scale(d, 2.25, 1, 2.25);
@@ -5461,6 +5963,7 @@ function render() {
     pass.setPipeline(GR.pWater); pass.setVertexBuffer(0, GR.waterVB); pass.setIndexBuffer(GR.waterIB, 'uint32'); pass.drawIndexed(6);
     if (heroVisible && GR.trailCount) { pass.setPipeline(GR.pTrail); pass.setVertexBuffer(0, GR.trailVB); pass.draw(GR.trailCount); }
     if (GR.partCount) { pass.setPipeline(GR.pPart); pass.setVertexBuffer(0, GR.partVB); pass.draw(6, GR.partCount); }
+    if (GR.rainCount) { pass.setPipeline(GR.pSplash); pass.draw(12, GR.splashCount); pass.setPipeline(GR.pRain); pass.draw(6, GR.rainCount); }
     if (state.debug && rig.init && GR.lineCount) { pass.setPipeline(GR.pLine); pass.setVertexBuffer(0, GR.lineVB); pass.draw(GR.lineCount); }
     pass.end();
   }

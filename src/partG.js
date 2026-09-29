@@ -1,9 +1,10 @@
 // ============================================================
 //  Per-frame scene assembly
 // ============================================================
-const SUN = V.norm([-0.5, 0.46, 0.62]);
+let SUN = V.norm([-0.5, 0.46, 0.62]);   // key light (sun by day, moon by night), set by the world clock
 function frameUniforms() {
-  const f = GR.frameData, asp = GR.w / GR.h;
+  const f = GR.frameData, asp = GR.w / GR.h, E = worldEnv();
+  SUN = E.key;
   const proj = M4.perspective(cam.curFov * Math.PI / 180, asp, 0.1, 900);
   const view = M4.lookAt(cam.pos, cam.target, [0, 1, 0]);
   const vp = M4.mul(proj, view);
@@ -17,10 +18,10 @@ function frameUniforms() {
   f.set(vp, 0); f.set(M4.invert(vp), 16); f.set(lvp, 32);
   f.set([...cam.pos, state.time], 48);
   f.set([...SUN, 1.0], 52);
-  f.set([1.75, 1.36, 0.98, 0], 56);         // golden afternoon sun
-  f.set([0.16, 0.38, 0.86, 0], 60);          // sky zenith
-  f.set([0.66, 0.78, 0.9, 0], 64);          // horizon haze
-  f.set([0.0042, 0.05, WORLD.water, state.shrineAwake ? 1 : 0], 68);
+  f.set([...E.keyCol, 0], 56);               // sun / moon colour
+  f.set([...E.skyTop, 0], 60);               // sky zenith
+  f.set([...E.skyHor, 0], 64);               // horizon haze
+  f.set([E.fog[0], E.fog[1], WORLD.water, state.shrineAwake ? 1 : 0], 68);
   f.set([GR.w, GR.h, 1 / GR.w, 1 / GR.h], 72);
   f.set([WORLD.size, WORLD.n, 0, 1], 76);
   f.set([view[0], view[4], view[8], player.pos[0]], 80);   // .w: hero x (grass push)
@@ -29,6 +30,7 @@ function frameUniforms() {
   c2[0] = Math.round(c2[0] / unit2) * unit2; c2[1] = Math.round(c2[1] / unit2) * unit2;
   if (QUALITY[state.quality].fine) f.set(M4.mul(M4.ortho(c2[0] - ext2, c2[0] + ext2, c2[1] - ext2, c2[1] + ext2, -c2[2] - 40, -c2[2] + 40), lv), 88);
   else { const off = new Float32Array(16); off[12] = 10; off[15] = 1; f.set(off, 88); }  // fine cascade off: every lookup lands outside it
+  worldUniforms(f, vp);
   GR.device.queue.writeBuffer(GR.frameUB, 0, f);
   // mirrored camera for the water reflection (reflect across the water plane, clip below it)
   const mirror = M4.id(); mirror[5] = -1; mirror[13] = 2 * WORLD.water;
@@ -42,7 +44,7 @@ function frameUniforms() {
   const sp = V.add(cam.pos, V.mul(SUN, 500));
   const cx = vp[0] * sp[0] + vp[4] * sp[1] + vp[8] * sp[2] + vp[12], cy = vp[1] * sp[0] + vp[5] * sp[1] + vp[9] * sp[2] + vp[13], cw = vp[3] * sp[0] + vp[7] * sp[1] + vp[11] * sp[2] + vp[15];
   const vis = cw > 0 ? clamp(V.dot(V.norm(V.sub(cam.target, cam.pos)), SUN) * 2.5, 0, 1) : 0;
-  GR.device.queue.writeBuffer(GR.postUB, 0, new Float32Array([cw > 0 ? cx / cw * 0.5 + 0.5 : 0.5, cw > 0 ? 0.5 - cy / cw * 0.5 : -1, vis, asp]));
+  GR.device.queue.writeBuffer(GR.postUB, 0, new Float32Array([cw > 0 ? cx / cw * 0.5 + 0.5 : 0.5, cw > 0 ? 0.5 - cy / cw * 0.5 : -1, vis * E.rays, asp, ...E.post]));
 }
 
 function buildDynamic() {
@@ -64,7 +66,7 @@ function buildDynamic() {
   const glow = state.shrineAwake ? 2.4 + Math.sin(t * 3) * 0.6 : 0.0;
   for (const pl of WORLD.pillars) {
     const m = at(pl.x + Math.sin(pl.a) * 0.47, SHRINE[1] + 2.4, pl.z + Math.cos(pl.a) * 0.47); M4.rotY(m, pl.a);
-    L.add('rune', m, state.shrineAwake ? [0.45, 1.0, 1.0, glow] : [0.35, 0.4, 0.45, 0], [0.4, 0, 0, 0]);
+    L.add('rune', m, state.shrineAwake ? [0.45, 1.0, 1.0, glow] : worldRuneTint(pl), [0.4, 0, 0, 0]);
   }
   if (state.shrineAwake) {
     const d = at(SHRINE[0], SHRINE[1] + 0.8 + 2.6, SHRINE[2]); M4.rotX(d, Math.PI / 2); M4.rotY(d, t * 0.8); M4.scale(d, 2.25, 1, 2.25);
@@ -351,6 +353,7 @@ function render() {
     pass.setPipeline(GR.pWater); pass.setVertexBuffer(0, GR.waterVB); pass.setIndexBuffer(GR.waterIB, 'uint32'); pass.drawIndexed(6);
     if (heroVisible && GR.trailCount) { pass.setPipeline(GR.pTrail); pass.setVertexBuffer(0, GR.trailVB); pass.draw(GR.trailCount); }
     if (GR.partCount) { pass.setPipeline(GR.pPart); pass.setVertexBuffer(0, GR.partVB); pass.draw(6, GR.partCount); }
+    if (GR.rainCount) { pass.setPipeline(GR.pSplash); pass.draw(12, GR.splashCount); pass.setPipeline(GR.pRain); pass.draw(6, GR.rainCount); }
     if (state.debug && rig.init && GR.lineCount) { pass.setPipeline(GR.pLine); pass.setVertexBuffer(0, GR.lineVB); pass.draw(GR.lineCount); }
     pass.end();
   }

@@ -1,0 +1,61 @@
+[
+{
+"js": "B=window.__brio;B.startGame();B.world.freeze(true);B.world.setWeather('clear');B.world.setTime(12.5);",
+"frames": 30
+},
+{
+"js": "B.cam.manualT=-100;B.cam.yaw=B.player.yaw+Math.PI+0.5;B.cam.pitch=0.15;B.cam.dist=6;B.cam.curDist=6;",
+"frames": 3,
+"shot": "w_noon"
+},
+{
+"js": "B.world.setTime(18.1);B.cam.yaw=B.player.yaw+Math.PI+2.6;",
+"frames": 3,
+"shot": "w_sunset"
+},
+{
+"js": "B.world.setTime(18.45);",
+"frames": 3,
+"shot": "w_dusk"
+},
+{
+"js": "B.world.setTime(6.25);B.cam.yaw=B.player.yaw+Math.PI+1.2;",
+"frames": 3,
+"shot": "w_sunrise"
+},
+{
+"js": "B.world.setTime(17.2);B.cam.yaw=B.player.yaw+Math.PI+0.5;",
+"frames": 3,
+"shot": "w_golden"
+},
+{
+"js": "B.world.setTime(18.9);B.cam.yaw=B.player.yaw+Math.PI+2.6;",
+"frames": 3,
+"shot": "w_bluehour"
+},
+{
+"js": "B.world.setTime(23.5);B.cam.yaw=B.player.yaw+Math.PI+0.5;B.cam.pitch=0.05;",
+"frames": 3,
+"shot": "w_night"
+},
+{
+"js": "B.world.setTime(5.9);B.world.setWeather('fog');",
+"frames": 3,
+"shot": "w_dawnfog"
+},
+{
+"js": "B.world.setTime(14);B.world.setWeather('rain');B.cam.pitch=0.15;",
+"frames": 30,
+"shot": "w_rain"
+},
+{
+"js": "B.world.setWeather('storm');",
+"frames": 30,
+"shot": "w_storm"
+},
+{
+"js": "B.world.wx.strikes.push([B.state.time+0.01,1.2]);",
+"frames": 2,
+"shot": "w_flash"
+}
+]

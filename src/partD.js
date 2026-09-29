@@ -1610,14 +1610,15 @@ function capeStep(dt, snap, time) {
     rig.capeRest = { h: CAPE.CH, w: [] };
     for (let j = 0; j < H; j++) rig.capeRest.w.push(0.4 / (W - 1) * (1 + 0.6 * Math.pow(j / (H - 1), 0.8)));
   }
-  const C = rig.cape, g = -9.8 * dt * dt, air = [Math.sin(time * 1.4) * 0.5, 0, Math.cos(time * 1.1) * 0.35];
+  // global wind (mod_world.js) pushes the cloth downwind and makes it flutter harder
+  const C = rig.cape, g = -9.8 * dt * dt, air = [Math.sin(time * 1.4) * 0.5 + wind.x * 4, 0, Math.cos(time * 1.1) * 0.35 + wind.z * 4], fl = 1 + wind.strength * 1.5;
   const fwd = R3.v(rig.Rfull, [0, 0, 1]);
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
     const n = C[j * W + i];
     if (j === 0) { n.q = n.p; n.p = pin(i); continue; }
     const vx = (n.p[0] - n.q[0]) * 0.975, vy = (n.p[1] - n.q[1]) * 0.975, vz = (n.p[2] - n.q[2]) * 0.975;
     n.q = n.p.slice();
-    const flutter = Math.sin(time * 9 + i * 1.3 + j * 0.8) * 0.0004 * j;
+    const flutter = Math.sin(time * 9 * (0.8 + wind.strength * 0.4) + i * 1.3 + j * 0.8) * 0.0004 * j * fl;
     n.p = [n.p[0] + vx + air[0] * dt * dt + flutter, n.p[1] + vy + g, n.p[2] + vz + air[2] * dt * dt + flutter];
   }
   const R = rig.capeRest;
