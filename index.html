@@ -3488,9 +3488,14 @@ fn waveH(p: vec2f, t: f32) -> f32 {
   c += F.sunCol.rgb * pow(max(dot(n, h), 0.0), 48.0) * 0.25 * sh;
   // light passing through wave crests that face the sun glows turquoise
   c += vec3f(0.06, 0.3, 0.26) * smoothstep(0.0, 0.25, h0) * max(dot(-vd, F.sunDir.xyz) * 0.5 + 0.5, 0.0) * (1.0 - fres) * sh;
+  // lacy shore foam: a surging wash line plus a net of bubbly threads that break apart as they spread
   let fn1 = vnoise(p * 2.2 + vec2f(t * 0.5, -t * 0.3));
-  let band = 0.5 + 0.5 * sin(depth * 9.0 - t * 2.2);
-  let foam = smoothstep(0.7, 0.0, depth) * smoothstep(0.35, 0.8, fn1 * 0.7 + band * 0.5 + (1.0 - depth * 1.4) * 0.35);
+  let surge = 0.18 + 0.12 * sin(t * 0.9 + p.x * 0.15 + p.y * 0.1);
+  let wash = clamp((surge + 0.08 - depth) / 0.1, 0.0, 1.0);
+  let lace1 = abs(vnoise(p * 6.0 + vec2f(t * 0.3, t * 0.2)) - 0.5); let lace2 = abs(vnoise(p * 13.0 - vec2f(t * 0.25, 0.0)) - 0.5);
+  let net = clamp(1.0 - min(lace1, lace2) * 6.0, 0.0, 1.0);
+  let near = clamp((0.9 - depth) / 0.9, 0.0, 1.0);
+  let foam = max(wash * (0.75 + 0.25 * fn1), net * near * 0.9);
   c = mix(c, vec3f(1.0), clamp(foam, 0.0, 1.0) * 0.9);
   let alpha = clamp(mix(0.3, 0.95, smoothstep(0.0, 2.4, depth)) + fres * 0.25 + foam, 0.0, 1.0);
   c = applyFog(c, v.wp);
