@@ -2987,12 +2987,27 @@ struct TOut { @builtin(position) pos: vec4f, @location(0) wp: vec3f, @location(1
   let rockW = smoothstep(0.86, 0.66, n.y);
   let strata = fbm(vec2f(v.wp.x * 0.6 + v.wp.z * 0.6, v.wp.y * 3.5)) ;
   let grassMicro = vnoise(v.wp.xz * 11.0) * 0.6 + vnoise(v.wp.xz * 27.0) * 0.4;
-  let th = grassMicro * 0.02 * (1.0 - rockW) + strata * 0.22 * rockW;
+  // dirt path (told apart by its colour): scattered pebbles from a jittered cell pattern
+  let dirt = smoothstep(0.02, 0.1, v.col.r - v.col.g) * (1.0 - rockW);
+  let cq = v.wp.xz * 7.0; let ci = floor(cq); var peb = 0.0; var pebTone = 0.0;
+  for (var ox = -1; ox <= 1; ox++) { for (var oz = -1; oz <= 1; oz++) {
+    let cc = ci + vec2f(f32(ox), f32(oz));
+    let hsh = fract(sin(vec2f(dot(cc, vec2f(127.1, 311.7)), dot(cc, vec2f(269.5, 183.3)))) * 43758.5453);
+    let rr = 0.12 + 0.2 * hsh.y; let dd = length(cq - cc - hsh) / rr;
+    let bump = (1.0 - smoothstep(0.55, 1.0, dd)) * step(0.35, hsh.x);
+    if (bump > peb) { peb = bump; pebTone = hsh.x; }
+  } }
+  // grass ground: clumpy tonal patches and fine blade speckle
+  let gpatch = fbm(v.wp.xz * 0.9); let speck = vnoise(v.wp.xz * 60.0);
+  let th = grassMicro * 0.02 * (1.0 - rockW) * (1.0 - dirt) + strata * 0.22 * rockW + peb * 0.025 * dirt + speck * 0.003 * (1.0 - dirt) * (1.0 - rockW);
   let dhx = dpdx(th); let dhy = dpdy(th); let px = dpdx(v.wp); let py = dpdy(v.wp);
   let r1 = cross(py, n); let r2 = cross(n, px); let det = dot(px, r1);
   n = normalize(abs(det) * n - sign(det) * (dhx * r1 + dhy * r2));
   var base = v.col * (0.84 + 0.28 * d1) * (0.94 + 0.12 * d2) * (0.9 + 0.2 * mix(grassMicro, strata, rockW));
   base *= 1.0 - smoothstep(0.35, -0.15, v.wp.y) * 0.35;
+  base = mix(base, base * (1.15 + 0.35 * pebTone) * vec3f(0.95, 0.93, 0.9), peb * dirt);
+  base *= 1.0 - dirt * (1.0 - peb) * 0.12 * vnoise(v.wp.xz * 18.0);
+  base *= mix(vec3f(1.0), mix(vec3f(0.86, 0.92, 0.8), vec3f(1.08, 1.06, 0.9), gpatch) * (0.94 + 0.12 * speck), (1.0 - dirt) * (1.0 - rockW));
   // caustics dancing on the shallow sea floor
   let ct = F.camPos.w;
   let cp = v.wp.xz * 1.3;
