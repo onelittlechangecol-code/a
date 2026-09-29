@@ -1,0 +1,10 @@
+{
+  "name": "Brío · Crónicas de la Isla de las Chispas",
+  "short_name": "Brío",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0b1122",
+  "theme_color": "#0b1122",
+  "icons": []
+}

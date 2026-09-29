@@ -9,6 +9,8 @@ struct Frame {
   fogP: vec4f, res: vec4f, misc: vec4f, camRight: vec4f, camUp: vec4f, lightVP2: mat4x4f,
   // living world (mod_world.js): true sun/moon, wind, weather, body wetness, clouds, glow, warm light, ambient
   wSun: vec4f, wMoon: vec4f, wWind: vec4f, wWx: vec4f, wHero: vec4f, wCloud: vec4f, wGlow: vec4f, wLight: vec4f, wAmb: vec4f, wCL: vec4f, wCS: vec4f,
+  // hero skeleton: skinning matrices, applied on the GPU
+  bones: array<mat4x4f, 18>,   // 17 = identity (the cape is simulated in world space)
 };
 @group(0) @binding(0) var<uniform> F: Frame;
 
@@ -379,9 +381,11 @@ struct VOut {
   o.lp = i.pos; o.tng = normalize(i.m1.xyz); return o;
 }
 // skinned hero + cloth: world-space vertices plus their bind-space position for stable surface detail
-struct HIn { @location(0) pos: vec3f, @location(1) nrm: vec3f, @location(2) col: vec4f, @location(9) bind: vec3f };
+struct HIn { @location(0) pos: vec3f, @location(1) nrm: vec3f, @location(2) col: vec4f, @location(9) bind: vec3f, @location(10) bi: vec4u, @location(11) bw: vec3f };
+fn heroSkin(bi: vec4u, bw: vec3f) -> mat4x4f { return F.bones[bi.x] * bw.x + F.bones[bi.y] * bw.y + F.bones[bi.z] * bw.z; }
 @vertex fn vsHero(i: HIn) -> VOut {
-  var o: VOut; o.pos = F.viewProj * vec4f(i.pos, 1.0); o.wp = i.pos; o.n = i.nrm; o.col = i.col;
+  let m = heroSkin(i.bi, i.bw); let wp = (m * vec4f(i.pos, 1.0)).xyz;
+  var o: VOut; o.pos = F.viewProj * vec4f(wp, 1.0); o.wp = wp; o.n = normalize((m * vec4f(i.nrm, 0.0)).xyz); o.col = i.col;
   o.tint = vec4f(1.0, 1.0, 1.0, 0.0); o.prm = vec4f(0.6, 0.35, 0.0, 0.0); o.lp = i.bind; o.tng = vec3f(0.0, -1.0, 0.0); return o;
 }
 fn hash3(p: vec3f) -> f32 { return fract(sin(dot(p, vec3f(127.1, 311.7, 74.7))) * 43758.5453); }
@@ -648,6 +652,10 @@ const WGSL_SHADOW = WGSL_COMMON + /* wgsl */`
 @vertex fn vsShadowTerrain(@location(0) pos: vec3f) -> @builtin(position) vec4f { return F.lightVP * vec4f(pos, 1.0); }
 @vertex fn vsShadowMesh2(i: VIn) -> @builtin(position) vec4f { return F.lightVP2 * vec4f(meshWorld(i), 1.0); }
 @vertex fn vsShadowTerrain2(@location(0) pos: vec3f) -> @builtin(position) vec4f { return F.lightVP2 * vec4f(pos, 1.0); }
+struct HSIn { @location(0) pos: vec3f, @location(10) bi: vec4u, @location(11) bw: vec3f };
+fn heroSkinS(bi: vec4u, bw: vec3f) -> mat4x4f { return F.bones[bi.x] * bw.x + F.bones[bi.y] * bw.y + F.bones[bi.z] * bw.z; }
+@vertex fn vsShadowHero(i: HSIn) -> @builtin(position) vec4f { return F.lightVP * (heroSkinS(i.bi, i.bw) * vec4f(i.pos, 1.0)); }
+@vertex fn vsShadowHero2(i: HSIn) -> @builtin(position) vec4f { return F.lightVP2 * (heroSkinS(i.bi, i.bw) * vec4f(i.pos, 1.0)); }
 `;
 
 const WGSL_POST = /* wgsl */`
@@ -725,7 +733,7 @@ const QUALITY = {
   media: { label: 'Media', dpr: 1, maxPix: 1600 * 900, refl: false, fine: true, grass: true, grassDist: 60 },
   baja: { label: 'Baja', dpr: 1, maxPix: 1024 * 576, refl: false, fine: false, grass: true, grassDist: 32 },
 };
-const FRAME_FLOATS = 148;
+const FRAME_FLOATS = 148 + 18 * 16;
 const INST_FLOATS = 24;
 
 async function initRenderer(meshes) {
@@ -773,9 +781,18 @@ async function initRenderer(meshes) {
   GR.waterVB = mk(new Float32Array([-W, 0, -W, 0, 1, 0, 0, 0, 0, 0, W, 0, -W, 0, 1, 0, 0, 0, 0, 0, W, 0, W, 0, 1, 0, 0, 0, 0, 0, -W, 0, W, 0, 1, 0, 0, 0, 0, 0]), U.VERTEX);
   GR.waterIB = mk(new Uint32Array([0, 2, 1, 0, 3, 2]), U.INDEX);
   // skinned hero body, cloth cape and sword trail (dynamic)
-  GR.heroVB = empty(HERO.out.byteLength, U.VERTEX); GR.heroIB = mk(HERO.idx, U.INDEX); GR.heroCount = HERO.idx.length;
+  {
+    const H = HERO, m = H.mesh, wb = new ArrayBuffer(H.nv * 16), wu = new Uint8Array(wb), wf = new Float32Array(wb);
+    for (let v = 0; v < H.nv; v++) {
+      H.out.set([m.p[v * 3], m.p[v * 3 + 1], m.p[v * 3 + 2], m.n[v * 3], m.n[v * 3 + 1], m.n[v * 3 + 2]], v * 13);
+      for (let j = 0; j < 3; j++) { wu[v * 16 + j] = H.bi[v * 3 + j]; wf[v * 4 + 1 + j] = H.bw[v * 3 + j]; }
+    }
+    GR.heroWB = mk(new Uint8Array(wb), U.VERTEX);
+  }
+  GR.heroVB = mk(HERO.out, U.VERTEX); GR.heroIB = mk(HERO.idx, U.INDEX); GR.heroCount = HERO.idx.length;
   GR.capeData = new Float32Array(CAPE.W * CAPE.H * 13);
   const cidx = []; for (let j = 0; j < CAPE.H - 1; j++) for (let i = 0; i < CAPE.W - 1; i++) { const a = j * CAPE.W + i; cidx.push(a, a + 1, a + CAPE.W, a + 1, a + CAPE.W + 1, a + CAPE.W); }
+  { const nc = GR.capeData.byteLength / 52, wb = new ArrayBuffer(nc * 16), wu = new Uint8Array(wb), wf = new Float32Array(wb); for (let v = 0; v < nc; v++) { wu[v * 16] = 17; wf[v * 4 + 1] = 1; } GR.capeWB = mk(new Uint8Array(wb), U.VERTEX); }
   GR.capeVB = empty(GR.capeData.byteLength, U.VERTEX); GR.capeIB = mk(new Uint32Array(cidx), U.INDEX); GR.capeCount = cidx.length;
   GR.trailData = new Float32Array(16 * 12 * 7);
   GR.trailVB = empty(GR.trailData.byteLength, U.VERTEX);
@@ -789,6 +806,7 @@ async function initRenderer(meshes) {
   GR.lineData = new Float32Array(1200 * 7);
   GR.lineVB = empty(GR.lineData.byteLength, U.VERTEX);
   GR.frameData = new Float32Array(FRAME_FLOATS);
+  GR.frameData.set(M4.id(), 148 + 17 * 16);
   GR.frameUB = empty(FRAME_FLOATS * 4, U.UNIFORM);
 
   // heightmap texture for the water's depth colouring
@@ -836,6 +854,7 @@ async function initRenderer(meshes) {
 
   const vA = { arrayStride: 40, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' }, { shaderLocation: 2, offset: 24, format: 'float32x4' }] };
   const vH = { arrayStride: 52, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' }, { shaderLocation: 2, offset: 24, format: 'float32x4' }, { shaderLocation: 9, offset: 40, format: 'float32x3' }] };
+  const vHW = { arrayStride: 16, attributes: [{ shaderLocation: 10, offset: 0, format: 'uint8x4' }, { shaderLocation: 11, offset: 4, format: 'float32x3' }] };
   const vI = { arrayStride: INST_FLOATS * 4, stepMode: 'instance', attributes: [0, 1, 2, 3, 4, 5].map(k => ({ shaderLocation: 3 + k, offset: k * 16, format: 'float32x4' })) };
   const vP = { arrayStride: 32, stepMode: 'instance', attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x4' }, { shaderLocation: 1, offset: 16, format: 'float32x4' }] };
   const vL = { arrayStride: 28, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x4' }] };
@@ -854,12 +873,12 @@ async function initRenderer(meshes) {
   GR.pSky = P('vsFull', 'fsSky', [], { depth: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'always' } });
   GR.pTerrain = P('vsTerrain', 'fsTerrain', [vA], { cull: 'none' });
   GR.pMesh = P('vsMesh', 'fsMesh', [vA, vI]);
-  GR.pHero = P('vsHero', 'fsMesh', [vH]);
+  GR.pHero = P('vsHero', 'fsMesh', [vH, vHW]);
   // single-sample variants for the half-res mirrored reflection pass
   GR.pSkyR = P('vsFull', 'fsSky', [], { ms1: true, depth: { format: 'depth24plus', depthWriteEnabled: false, depthCompare: 'always' } });
   GR.pTerrainR = P('vsTerrain', 'fsTerrain', [vA], { ms1: true });
   GR.pMeshR = P('vsMesh', 'fsMesh', [vA, vI], { ms1: true });
-  GR.pHeroR = P('vsHero', 'fsMesh', [vH], { ms1: true });
+  GR.pHeroR = P('vsHero', 'fsMesh', [vH, vHW], { ms1: true });
   GR.pWater = P('vsWater', 'fsWater', [vA], { blend: premul, depth: depthRO });
   GR.pPart = P('vsPart', 'fsPart', [vP], { blend: premul, depth: depthRO });
   GR.pTrail = P('vsLine', 'fsTrail', [vL], { blend: premul, depth: depthRO });
@@ -873,13 +892,13 @@ async function initRenderer(meshes) {
   });
   GR.psMesh = SP('vsShadowMesh', [vA, vI]);
   GR.psTerrain = SP('vsShadowTerrain', [vA]);
-  GR.psHero = SP('vsShadowTerrain', [vH]);
+  GR.psHero = SP('vsShadowHero', [vH, vHW]);
   const SP2 = (vs, buffers) => device.createRenderPipeline({
     layout: shadowPL, vertex: { module: shadowMod, entryPoint: vs, buffers },
     primitive: { topology: 'triangle-list', cullMode: 'none' },
     depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'less', depthBias: 1, depthBiasSlopeScale: 1.5 },
   });
-  GR.psMesh2 = SP2('vsShadowMesh2', [vA, vI]); GR.psTerrain2 = SP2('vsShadowTerrain2', [vA]); GR.psHero2 = SP2('vsShadowTerrain2', [vH]);
+  GR.psMesh2 = SP2('vsShadowMesh2', [vA, vI]); GR.psTerrain2 = SP2('vsShadowTerrain2', [vA]); GR.psHero2 = SP2('vsShadowHero2', [vH, vHW]);
   const PP = (fs, fmt) => device.createRenderPipeline({ layout: 'auto', vertex: { module: postMod, entryPoint: 'vsFull' }, fragment: { module: postMod, entryPoint: fs, targets: [{ format: fmt }] }, primitive: { topology: 'triangle-list' } });
   GR.pBright = PP('fsBright', HDR); GR.pBlurH = PP('fsBlurH', HDR); GR.pBlurV = PP('fsBlurV', HDR); GR.pFinal = PP('fsFinal', format);
   resizeTargets();

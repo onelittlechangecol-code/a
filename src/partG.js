@@ -32,6 +32,13 @@ function frameUniforms() {
   if (QUALITY[state.quality].fine) f.set(M4.mul(M4.ortho(c2[0] - ext2, c2[0] + ext2, c2[1] - ext2, c2[1] + ext2, -c2[2] - 40, -c2[2] + 40), lv), 88);
   else { const off = new Float32Array(16); off[12] = 10; off[15] = 1; f.set(off, 88); }  // fine cascade off: every lookup lands outside it
   worldUniforms(f, vp);
+  // skinning matrices for the hero (GPU skinning; the mesh itself never changes)
+  if (rig.skin) for (let b = 0; b < 17; b++) {
+    const S = rig.skin[b]; if (!S) continue;
+    const M = S.M, t = S.t, o = 148 + b * 16;
+    f[o] = M[0]; f[o + 1] = M[1]; f[o + 2] = M[2]; f[o + 3] = 0; f[o + 4] = M[3]; f[o + 5] = M[4]; f[o + 6] = M[5]; f[o + 7] = 0;
+    f[o + 8] = M[6]; f[o + 9] = M[7]; f[o + 10] = M[8]; f[o + 11] = 0; f[o + 12] = t[0]; f[o + 13] = t[1]; f[o + 14] = t[2]; f[o + 15] = 1;
+  }
   GR.device.queue.writeBuffer(GR.frameUB, 0, f);
   // mirrored camera for the water reflection (reflect across the water plane, clip below it)
   const mirror = M4.id(); mirror[5] = -1; mirror[13] = 2 * WORLD.water;
@@ -294,7 +301,7 @@ function render() {
   frameUniforms();
   buildDynamic();
   const heroVisible = !player.hidden && !(player.inv > 0 && Math.floor(state.time * 18) % 2 === 0) && rig.init;
-  if (rig.init) { skinHero(); GR.device.queue.writeBuffer(GR.heroVB, 0, HERO.out); buildCapeTrail(); }
+  if (rig.init) buildCapeTrail();
   if (!GR.identIB) { GR.identIB = GR.device.createBuffer({ size: INST_FLOATS * 4, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST }); GR.device.queue.writeBuffer(GR.identIB, 0, identityInst); }
   buildParticles();
   if (state.debug && rig.init) buildLines();
@@ -311,8 +318,8 @@ function render() {
     drawGroups(pass, GR.dynGroups, GR.dynIB);
     if (heroVisible) {
       pass.setPipeline(GR.psHero);
-      pass.setVertexBuffer(0, GR.heroVB); pass.setIndexBuffer(GR.heroIB, 'uint32'); pass.drawIndexed(GR.heroCount);
-      pass.setVertexBuffer(0, GR.capeVB); pass.setIndexBuffer(GR.capeIB, 'uint32'); pass.drawIndexed(GR.capeCount);
+      pass.setVertexBuffer(0, GR.heroVB); pass.setVertexBuffer(1, GR.heroWB); pass.setIndexBuffer(GR.heroIB, 'uint32'); pass.drawIndexed(GR.heroCount);
+      pass.setVertexBuffer(0, GR.capeVB); pass.setVertexBuffer(1, GR.capeWB); pass.setIndexBuffer(GR.capeIB, 'uint32'); pass.drawIndexed(GR.capeCount);
     }
     pass.end();
   }
@@ -327,8 +334,8 @@ function render() {
     drawGroups(pass, GR.dynGroups, GR.dynIB);
     if (heroVisible) {
       pass.setPipeline(GR.psHero2);
-      pass.setVertexBuffer(0, GR.heroVB); pass.setIndexBuffer(GR.heroIB, 'uint32'); pass.drawIndexed(GR.heroCount);
-      pass.setVertexBuffer(0, GR.capeVB); pass.setIndexBuffer(GR.capeIB, 'uint32'); pass.drawIndexed(GR.capeCount);
+      pass.setVertexBuffer(0, GR.heroVB); pass.setVertexBuffer(1, GR.heroWB); pass.setIndexBuffer(GR.heroIB, 'uint32'); pass.drawIndexed(GR.heroCount);
+      pass.setVertexBuffer(0, GR.capeVB); pass.setVertexBuffer(1, GR.capeWB); pass.setIndexBuffer(GR.capeIB, 'uint32'); pass.drawIndexed(GR.capeCount);
     }
     pass.end();
   }
@@ -347,8 +354,8 @@ function render() {
     drawGroups(pass, GR.dynGroups, GR.dynIB);
     if (heroVisible) {
       pass.setPipeline(GR.pHeroR);
-      pass.setVertexBuffer(0, GR.heroVB); pass.setIndexBuffer(GR.heroIB, 'uint32'); pass.drawIndexed(GR.heroCount);
-      pass.setVertexBuffer(0, GR.capeVB); pass.setIndexBuffer(GR.capeIB, 'uint32'); pass.drawIndexed(GR.capeCount);
+      pass.setVertexBuffer(0, GR.heroVB); pass.setVertexBuffer(1, GR.heroWB); pass.setIndexBuffer(GR.heroIB, 'uint32'); pass.drawIndexed(GR.heroCount);
+      pass.setVertexBuffer(0, GR.capeVB); pass.setVertexBuffer(1, GR.capeWB); pass.setIndexBuffer(GR.capeIB, 'uint32'); pass.drawIndexed(GR.capeCount);
     }
     }
     pass.end();
@@ -367,8 +374,8 @@ function render() {
     drawGroups(pass, GR.dynGroups, GR.dynIB);
     if (heroVisible) {
       pass.setPipeline(GR.pHero);
-      pass.setVertexBuffer(0, GR.heroVB); pass.setIndexBuffer(GR.heroIB, 'uint32'); pass.drawIndexed(GR.heroCount);
-      pass.setVertexBuffer(0, GR.capeVB); pass.setIndexBuffer(GR.capeIB, 'uint32'); pass.drawIndexed(GR.capeCount);
+      pass.setVertexBuffer(0, GR.heroVB); pass.setVertexBuffer(1, GR.heroWB); pass.setIndexBuffer(GR.heroIB, 'uint32'); pass.drawIndexed(GR.heroCount);
+      pass.setVertexBuffer(0, GR.capeVB); pass.setVertexBuffer(1, GR.capeWB); pass.setIndexBuffer(GR.capeIB, 'uint32'); pass.drawIndexed(GR.capeCount);
     }
     pass.setPipeline(GR.pWater); pass.setVertexBuffer(0, GR.waterVB); pass.setIndexBuffer(GR.waterIB, 'uint32'); pass.drawIndexed(6);
     if (heroVisible && GR.trailCount) { pass.setPipeline(GR.pTrail); pass.setVertexBuffer(0, GR.trailVB); pass.draw(GR.trailCount); }
@@ -468,6 +475,10 @@ const CINE = { t: 0, len: 15, lines: [
   [5.4, 9.8, 'Cuando el santuario se apagó, se dispersaron por la hierba… y los Gruñones despertaron.'],
   [10.3, 14.6, 'Brío, el último guardián del Sol, jura devolverles la luz.']] };
 function startGame(cine = true) {
+  // phones: go full screen and lock to landscape where the browser allows it (Android); iOS shows the rotate prompt instead
+  if (isTouch && document.documentElement.requestFullscreen && !document.fullscreenElement) {
+    document.documentElement.requestFullscreen({ navigationUI: 'hide' }).then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape')).catch(() => { });
+  }
   document.getElementById('loader').classList.add('done');
   initAudio(); if (AC && AC.state === 'suspended') AC.resume();
   sfx('ui');
@@ -616,7 +627,7 @@ async function boot() {
   try { cameraUpdate(0.016, [0, 0]); render(); } catch (_) { }
   await step(100, 'Listo');
   clearInterval(loreT);
-  setTimeout(() => { ld.classList.add('done'); show('intro', true); document.body.classList.add('cine'); document.getElementById('playBtn').focus(); }, 350);
+  setTimeout(() => { ld.classList.add('done'); if (state.mode !== 'title') return; show('intro', true); document.body.classList.add('cine'); document.getElementById('playBtn').focus(); }, 350);
   // wire UI
   document.getElementById('playBtn').addEventListener('click', () => startGame());
   document.getElementById('resumeBtn').addEventListener('click', resumeGame);
