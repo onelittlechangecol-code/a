@@ -19,7 +19,7 @@ Abre `index.html` en un navegador con WebGPU (Chrome o Edge 113+, Safari 26+, Fi
 | Ver esqueleto, IK y capa | `B` | Select | Botón Esqueleto |
 | Pausa | `P` / `Esc` | Start | Botón Pausa |
 
-Objetivo: recoge chispas (cristales dorados tallados con un halo que gira) para despertar el santuario de la colina y cruza su portal. Hay corazones extra en las islas flotantes.
+Objetivo: recoge chispas (cristales dorados tallados con un halo que gira) para despertar el santuario de la colina y cruza su portal. Hay corazones extra (contenedores de corazón abombados y brillantes con marco dorado) en las islas flotantes.
 
 ## Qué hay dentro
 

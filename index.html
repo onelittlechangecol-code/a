@@ -463,11 +463,22 @@ function buildMeshes() {
     m.merge(transformed(torusMesh(1.35, 0.045, 40, 5, [1, 1, 1, 5]), M4.rotX(M4.id(), 0.35)));
     return m;
   })();
+  // heart container: a puffy glossy heart from the classic parametric outline, framed by a gold rim
   M.heart = (() => {
-    const h = new Mesh();
-    h.merge(sphereMesh(16, 12, COL.scarf), M4.scale(at(-0.28, 0.12, 0), 0.42, 0.42, 0.3));
-    h.merge(sphereMesh(16, 12, COL.scarf), M4.scale(at(0.28, 0.12, 0), 0.42, 0.42, 0.3));
-    h.merge(cylMesh(4, 0.62, 0.0, 0.75, COL.scarf, false), M4.scale(M4.rotZ(at(0, 0.05, 0), Math.PI), 1, 1, 0.45));
+    const h = new Mesh(), NT = 48, NR = 10, red = [...COL.scarf, 18];
+    const outline = (t) => { const s = Math.sin(t); return [16 * s * s * s / 17, (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) / 17 + 0.1]; };
+    for (const side of [1, -1]) {
+      const base = h.vcount;
+      for (let r = 0; r <= NR; r++) for (let k = 0; k <= NT; k++) {
+        const u = r / NR, o = outline(k / NT * TAU), z = side * 0.34 * Math.sqrt(Math.max(0, 1 - u * u));
+        const p = [o[0] * u, o[1] * u + 0.06 * (1 - u), z];
+        const hl = 1 + 0.25 * Math.max(0, 1 - Math.hypot(p[0] + 0.3, p[1] - 0.35) / 0.35) * (side > 0 ? 1 : 0);
+        h.v(p, [0, 0, side], [red[0] * hl, red[1] * hl, red[2] * hl, 18]);
+      }
+      for (let r = 0; r < NR; r++) for (let k = 0; k < NT; k++) { const a = base + r * (NT + 1) + k, b = a + NT + 1; if (side > 0) { h.tri(a, b, a + 1); h.tri(a + 1, b, b + 1); } else { h.tri(a, a + 1, b); h.tri(a + 1, b + 1, b); } }
+    }
+    h.recomputeNormals();
+    for (let k = 0; k < NT; k++) { const a = outline(k / NT * TAU), b = outline((k + 1) / NT * TAU); h.merge(tubeMesh([a[0] * 1.02, a[1] * 1.02, 0], [b[0] * 1.02, b[1] * 1.02, 0], () => 0.05, () => [...COL.orb, 5], 6, 1)); }
     return h;
   })();
 
@@ -3034,6 +3045,7 @@ fn lighting(base: vec3f, n: vec3f, wp: vec3f, roughIn: f32, rim: f32, sh: f32, m
   else if (m == 12) { rough = 0.9; sss = 0.25; }
   else if (m == 16) { rough = 0.42; metal = 1.0; }
   else if (m == 17) { rough = 0.7; sss = 0.55; }
+  else if (m == 18) { rough = 0.12; sss = 0.3; }
   let v = normalize(F.camPos.xyz - wp); let l = F.sunDir.xyz;
   let nl = dot(n, l);
   // soft wrap for a painterly, forgiving look
