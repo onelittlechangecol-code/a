@@ -1648,12 +1648,23 @@ function buildGoblin(M) {
       const cheek = n0[2] > 0.35 && Math.abs(n0[0]) > 0.35 && Math.abs(n0[0]) < 0.85;
       const stripe = cheek && (Math.abs(n0[1] + 0.05 - Math.abs(n0[0]) * 0.2) < 0.045 || Math.abs(n0[1] + 0.18 - Math.abs(n0[0]) * 0.2) < 0.04);
       return stripe ? mc('#e9e2d0', 1) : G.skin;
-    }, 32, 24, (q, n0) => { if (n0[1] > 0.25 && n0[2] > 0.3) q[2] += 0.02 * n0[1]; return q; }));
+    }, 44, 34, (q, n0) => {
+      const fr = Math.max(0, n0[2]), ax = Math.abs(n0[0]);
+      if (n0[1] > 0.25 && n0[2] > 0.3) q[2] += 0.02 * n0[1];
+      // scowling forehead: furrows over a heavy brow
+      q = V.add(q, V.mul(n0, 0.006 * Math.sin(n0[1] * 38) * smooth(0.35, 0.6, n0[1]) * (1 - smooth(0.8, 0.95, n0[1])) * fr));
+      // broad flattened snout pushed out of the face, with carved nostrils
+      const sn = Math.exp(-((n0[0] / 0.32) ** 2) - (((n0[1] + 0.35) / 0.2) ** 2)) * fr;
+      q[2] += 0.05 * sn; q[0] *= 1 + 0.25 * sn;
+      q = V.sub(q, V.mul(n0, 0.012 * Math.exp(-(((ax - 0.12) / 0.06) ** 2) - (((n0[1] + 0.4) / 0.06) ** 2)) * fr));
+      // cheekbones and a jutting lower jaw
+      q = V.add(q, V.mul(n0, 0.014 * Math.exp(-(((ax - 0.55) / 0.2) ** 2) - (((n0[1] + 0.1) / 0.18) ** 2)) * fr));
+      if (n0[1] < -0.5) q[2] += 0.03 * (-n0[1] - 0.5) * fr;
+      return q;
+    }));
     for (let k = 0; k < 6; k++) { const x = -0.05 + k * 0.02; h.merge(cylMesh(5, 0.008, 0.0, 0.025, G.bone, false), M4.rotX(at(x, 0.055, 0.195 - Math.abs(x) * 0.3), 0.2)); }  // teeth
     for (const s of [1, -1]) h.merge(transformed(torusMesh(0.02, 0.004, 14, 5, mc('#e2b24f', 5)), M4.rotZ(at(0.26 * s, 0.17, -0.02), Math.PI / 2)));  // ear hoops
     h.merge(ellipsoid([0, 0.2, 0.15], [0.14, 0.035, 0.05], G.skinDark, 18, 8));                      // brow ridge
-    h.merge(ellipsoid([0, 0.1, 0.17], [0.07, 0.055, 0.06], G.skin, 16, 10));                          // snout
-    for (const s of [1, -1]) h.merge(ellipsoid([0.025 * s, 0.1, 0.225], [0.012, 0.01, 0.008], G.pupil, 8, 6)); // nostrils
     h.merge(ellipsoid([0, 0.02, 0.1], [0.15, 0.06, 0.1], G.skinDark, 20, 10));                        // jaw
     for (const s of [1, -1]) {
       h.merge(transformed(cylMesh(8, 0.018, 0.002, 0.07, G.bone, false), M4.rotX(at(0.075 * s, 0.03, 0.18), -0.25)));   // tusks
