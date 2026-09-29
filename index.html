@@ -3329,7 +3329,7 @@ fn vnoise3(p: vec3f) -> f32 {
   let mr = length(mc * vec2f(1.0, 0.8));
   let ringH = 1.0 - smoothstep(0.08, 0.2, abs(mr - 0.34));
   let mailFade = smoothstep(0.02, 0.006, fp);
-  let h = isMail * ringH * mailFade * 0.0022 + isStone * stone * 0.035 + isGrass * turf * 0.012 + isLeaf * leafy * 0.02 + isBark * (grooves * 0.6 + vnoise3(p * 12.0) * 0.4) * 0.025 + embH * 0.0008 + isCloth * weave * smoothstep(0.004, 0.0012, fp) * 0.00045
+  let h = isMail * ringH * mailFade * 0.0022 + isStone * stone * 0.035 + isGrass * turf * 0.012 + isLeaf * leafy * 0.02 + isBark * (grooves * 0.6 + vnoise3(p * 12.0) * 0.4) * 0.025 + embH * 0.0008 + isCloth * weave * smoothstep(0.004, 0.0012, fp) * 0.00035
         + isLeather * grain * smoothstep(0.006, 0.0015, fp) * 0.0006
         + isSkin * pores * smoothstep(0.0015, 0.0004, fp) * 0.00002
         + isMetal * brushed * 0.00008
@@ -3401,7 +3401,7 @@ fn vnoise3(p: vec3f) -> f32 {
   if (!ff) { base *= 1.0 - isCape * 0.35; }
   base *= (1.0 + isStone * (stone - 0.5) * 0.5 + isGrass * (turf - 0.5) * 0.4);
   base *= (1.0 + isLeaf * (leafy - 0.5) * 0.45) * (1.0 - isBark * (1.0 - grooves) * 0.35);
-  base *= 1.0 - isCloth * (1.0 - weave) * 0.16 - isLeather * (0.55 - grain) * 0.22 - isHair * (1.0 - hairH) * 0.1 * smoothstep(0.006, 0.0015, fp);
+  base *= 1.0 - isCloth * (1.0 - weave) * 0.11 - isCloth * (vnoise3(p * 45.0) - 0.5) * 0.1 - isLeather * (0.55 - grain) * 0.22 - isHair * (1.0 - hairH) * 0.1 * smoothstep(0.006, 0.0015, fp);
   // iris fibres + dark limbal ring (only shows on the coloured part of the eye)
   let ir = length(p.xy); let ang = atan2(p.y, p.x);
   let fib = 0.8 + 0.2 * sin(ang * 46.0 + vnoise3(p * 9.0) * 6.0) - smoothstep(0.75, 1.0, ir) * 0.35 + smoothstep(0.35, 0.0, ir) * 0.2;
