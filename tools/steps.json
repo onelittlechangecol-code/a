@@ -1,0 +1,7 @@
+[
+ {"js":"B=window.__brio;B.startGame();window.__sr=false;Object.defineProperty(window,'__skipRender',{configurable:true,get(){return window.__noRender||window.__sr;},set(v){window.__sr=v;}});","frames":30},
+ {"js":"(async()=>{window.__noRender=true;const P=[[0,56],[5,47],[14,39],[19,29],[15,19],[4,13],[-9,8],[-15,-1],[-11,-9],[-5,-8]];let last=B.player.pos.slice(),stuck=0;for(let i=1;i<P.length;i++){for(let n=0;n<500;n++){const p=B.player.pos,dx=P[i][0]-p[0],dz=P[i][1]-p[2];if(Math.hypot(dx,dz)<1.5)break;B.cam.yaw=Math.atan2(-dx,-dz);B.cam.manualT=-1e9;B.keys.up=true;const mv=Math.hypot(p[0]-last[0],p[2]-last[2]);last=p.slice();if(mv<0.05&&B.player.onGround){if(++stuck>2){B.press('jump');B.keys.jump=true;stuck=0;}}else{stuck=0;B.keys.jump=false;}await window.__advance(4);}}B.keys.up=false;B.keys.jump=false;window.__walk={pos:B.player.pos.slice(),orbs:B.stats.orbs};console.log('RESULTS walk '+JSON.stringify(window.__walk));})()","frames":10},
+ {"js":"(async()=>{const W=B.WORLD,req=B.state.required;for(let guard=0;guard<200&&B.stats.orbs<req;guard++){const left=W.orbs.filter(o=>!o.got);const iso=o=>left.filter(q=>q!==o&&Math.hypot(q.x-o.x,q.y-o.y,q.z-o.z)<4).length;const need=req-B.stats.orbs;let o=left.find(q=>iso(q)<need)||left[0];if(!o)break;B.player.pos=[o.x,o.y-0.7,o.z];B.player.vel=[0,0,0];await window.__advance(3);}})()","frames":10},
+ {"js":"B.player.pos=[0,B.WORLD.shrineH+1.2,-14];B.player.vel=[0,0,0];","frames":90},
+ {"js":"window.__noRender=false;","frames":2}
+]

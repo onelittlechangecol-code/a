@@ -13,7 +13,7 @@ Un juego de plataformas y exploración en 3D, en un solo archivo (`index.html`),
 
 ## Código
 
-El juego se publica como un único `index.html`, generado desde `src/` con `python3 src/build.py`. Las pruebas están en `tools/`.
+El juego se publica como un único `index.html`, generado desde `src/` con `python3 src/build.py` (los módulos `src/mod_*.js` se insertan tras `partE.js`). Las pruebas están en `tools/`: `node test2.mjs` recorre el camino con el guion de `tools/steps.json`, reúne las chispas y cruza el portal.
 
 ## Cómo jugar
 
@@ -29,6 +29,12 @@ Abre `index.html` en un navegador con WebGPU (Chrome o Edge 113+, Safari 26+, Fi
 | Estocada descendente (en el aire) | `K` / `Ctrl` | B | Estocada |
 | Ver esqueleto, IK y capa | `B` | Select | Botón Esqueleto |
 | Pausa | `P` / `Esc` | Start | Botón Pausa |
+| Levantar, cargar y lanzar objetos pequeños (antorcha: en la mano) | `F` (otra vez: lanzar · `V`: dejar) | LB | Mano (tocar) |
+| Mano Maestra: apuntar, agarrar y soltar | `G` / clic con el ratón fijado | Y | Mano (tocar) |
+| Mano Maestra: acercar / alejar (la cámara sube o baja el objeto) | `Q` `E` / rueda | Cruceta arriba/abajo | Cámara |
+| Mano Maestra: girar 45° | `Z` (horizontal) · `X` (vertical) | Cruceta izq./der. | — |
+| Pegar el objeto agarrado al que toca | `T` | LT | Mano (tocar mientras toca otro) |
+| Soltar todo y despegar la construcción | `V` | R3 | Mano (mantener) |
 
 Objetivo: recoge chispas (cristales dorados tallados con un halo que gira) para despertar el santuario de la colina y cruza su portal. Hay corazones extra (contenedores de corazón abombados y brillantes con marco dorado) en las islas flotantes.
 
@@ -48,6 +54,16 @@ Objetivo: recoge chispas (cristales dorados tallados con un halo que gira) para 
 - Doble salto, planeo, voltereta de esquiva con invulnerabilidad, dash aéreo, estocada con onda expansiva, combo de 3 golpes y ataque giratorio cargado.
 - Goblins articulados con piel curtida y moteada, brazos y piernas musculosos y garrote con aro de hierro: deambulan, persiguen y atacan; aguantan dos golpes, se tambalean con destello, y al caer salen girando y desaparecen en humo.
 - Hitstop, chispas, sacudida de cámara, cambio de FOV y vibración del mando.
+
+**Física y creatividad** (`src/mod_physics.js`)
+- Motor de sólidos rígidos propio a paso fijo (120 Hz): esferas (rocas), cápsulas (troncos, antorchas), cajas orientadas (cajas, tablones) y cilindros (barriles, que ruedan de verdad sobre el terreno). Gravedad, restitución, fricción de Coulomb, rodadura con resistencia, contactos especulativos, impulsos secuenciales con corrección de penetración por pseudo-velocidades (split impulse), SAT entre cajas, colisión con el relieve del terreno (normal de la pendiente), árboles, rocas, columnas, la plaza y las islas flotantes, y cuerpos que se duermen al quedarse quietos (y se congelan lejos del jugador) para que decenas de objetos cuesten casi nada.
+- Unos 80 objetos repartidos con sentido: un almacén junto al santuario (pirámide de cajas, barriles, tablones y una antorcha), campamentos de goblins con barriles explosivos, rocas encaramadas en las laderas, troncos caídos junto a los árboles del camino, un taller junto al inicio con pila de tablones, cajas y una hoguera, y troncos y tablones en la playa para construir una balsa. Todos se construyen con código: cajas de tablones con veta, marco, riostras diagonales y esquineras de hierro remachadas; barriles abombados de duelas con aros de hierro y tapas; barriles rojos con banda amarilla y mecha; troncos de corteza nudosa con anillos de crecimiento en los cortes; rocas redondeadas con grietas, líquenes y musgo; antorchas con cabeza de tela embreada.
+- Brío empuja las cajas al andar, se sube a ellas, se deja llevar por lo que pisa (balsas, tablones que se mueven) y hunde un poco lo que es ligero. Una roca rodando o una caja lanzada tumban a los goblins; lo que golpea fuerte al héroe le hace daño. La espada, el ataque giratorio y la onda de la estocada empujan los objetos.
+- Levantar y lanzar (`F`): pose de carga con los brazos estirados sobre la cabeza; las antorchas se llevan en la mano como un arma y se encienden al acercarlas a una hoguera, un brasero o algo que arde.
+- **Mano Maestra** (`G`): apunta con la cámara (retícula verde), agarra el objeto con un haz de luz verde que sale de la mano, muévelo en 3D (la cámara lo sube o baja, `Q`/`E` o la rueda lo acercan o alejan), gíralo 45° con `Z`/`X` y, cuando toca otro objeto (que se ilumina en amarillo), pulsa `T` para **pegarlos**: se funden en un único sólido compuesto con su masa, centro de masas y tensor de inercia combinados, con nódulos de pegamento brillantes en las uniones. Así se construyen puentes, rampas, torres o balsas. `V` suelta y separa todas las piezas de la construcción agarrada.
+- **Flotación**: los objetos flotan en el agua según su densidad (la madera y los barriles flotan, la piedra se hunde), con arrastre, pequeñas olas y deriva con el viento si el módulo de mundo lo expone; una balsa de troncos y tablones pegados aguanta al héroe.
+- **Química del fuego**: `igniteAt(pos, radio)` es global. La hierba arde en una rejilla de 2 m sobre la isla y se propaga a las celdas vecinas (más a favor del viento, sin cruzar caminos, playa ni la plaza) dejando el suelo chamuscado y las matas quemadas; la madera prende, humea, suelta ascuas, se carboniza y contagia el fuego; el humo y las lenguas de fuego se dibujan con partículas y llamas instanciadas emisivas. Los barriles rojos explotan con fuego, golpes fuertes, la espada o la onda de otra explosión: daño en radio, impulso a objetos y goblins, fuego, bola de fuego, humo, onda y sacudida. El fuego crea corrientes de aire caliente que elevan a Brío mientras planea. Si el módulo de mundo expone lluvia (`rainAmount` o `weather`), la lluvia apaga el fuego; el agua apaga lo que se moja. Hay una hoguera junto al inicio y dos braseros en la subida al santuario.
+- API para pruebas y otros módulos en `window.PHYS` y `window.__brio.phys` (`spawn`, `igniteAt`, `explode`, `grab`, `glueBodies`, `count`…).
 
 **Mundo y render**
 - Isla procedural con terrazas, playa con arena mojada brillante junto al agua y marcas onduladas, camino de tierra con guijarros, suelo de hierba con manchas de tono y grandes zonas de pasto seco oliváceo y hondonadas de verde intenso, árboles de copa frondosa con ramas y corteza, rocas facetadas con grietas, líquenes y musgo, islas flotantes con repisas de estratos, roca facetada, estalactitas, raíces y enredaderas con hojas, un santuario con columnas estriadas de piedra envejecida con musgo a parches, glifos brillantes, portal de dovelas talladas en relieve con remolino de luz y plaza de mosaico envejecida (cada baldosa con su tono, suciedad en los bordes y musgo en las juntas) con escalones.

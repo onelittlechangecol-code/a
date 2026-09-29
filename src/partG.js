@@ -103,6 +103,7 @@ function buildDynamic() {
   // hero
   const flicker = p.inv > 0 && Math.floor(t * 18) % 2 === 0;
   if (!p.hidden && !flicker && rig.init) addHero(L, t);
+  if (typeof physDraw === 'function') physDraw(L, t);
   const r = packInstances(L.map, GR.dynData);
   GR.dynGroups = r.groups;
   GR.device.queue.writeBuffer(GR.dynIB, 0, GR.dynData, 0, Math.max(1, r.n) * INST_FLOATS);
@@ -386,6 +387,7 @@ function simStep(dt, inp) {
   islandsStep(dt);
   playerStep(dt, inp);
   for (const f of foes) foeStep(f, dt);
+  if (typeof physStep === 'function') physStep(dt, inp);
   pickupsStep(dt);
   updateRig(dt, state.time);
 }
@@ -500,6 +502,7 @@ function restartGame() {
   for (const o of WORLD.orbs) { o.got = false; o.x = o.ox; o.y = o.oy; o.z = o.oz; o.pull = 0; }
   for (const h of WORLD.hearts) h.got = false;
   resetFoes();
+  if (typeof physReset === 'function') physReset();
   player.maxHp = 4;
   resetPlayer(START.slice(), Math.PI);
   Object.assign(stats, { orbs: 0, foes: 0, falls: 0 });
@@ -557,6 +560,7 @@ async function boot() {
   buildHeroProps(MESHES);
   buildGoblin(MESHES);
   buildLife(MESHES);
+  if (typeof physBoot === 'function') physBoot(MESHES);
   await step(55, 'Esculpiendo al héroe');
   HERO = buildHero();
   resetFoes();
