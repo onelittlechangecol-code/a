@@ -114,11 +114,28 @@ function buildDynamic() {
   const flicker = p.inv > 0 && Math.floor(t * 18) % 2 === 0;
   if (!p.hidden && !flicker && rig.init) addHero(L, t);
   if (typeof physDraw === 'function') physDraw(L, t);
+  cullDynamic(L.map);
   const r = packInstances(L.map, GR.dynData);
   GR.dynGroups = r.groups;
   GR.device.queue.writeBuffer(GR.dynIB, 0, GR.dynData, 0, Math.max(1, r.n) * INST_FLOATS);
 }
 
+// drop dynamic instances (goblins, bodies, islands, life...) that are far outside the camera view; a margin keeps their shadows
+function cullDynamic(map) {
+  const P = GR.frustum; if (!P) return;
+  for (const [mesh, items] of map) {
+    const mi = GR.meshInfo[mesh]; if (!mi || mi.r === undefined || mesh === 'lock') continue;
+    let w = 0;
+    for (let k = 0; k < items.length; k++) {
+      const M = items[k][0], x = M[12], y = M[13], z = M[14];
+      const rad = mi.r * Math.max(Math.hypot(M[0], M[1], M[2]), Math.hypot(M[4], M[5], M[6]), Math.hypot(M[8], M[9], M[10])) + 6;
+      let vis = Math.hypot(x - cam.pos[0], z - cam.pos[2]) < 160 + rad;
+      for (let j = 0; vis && j < 6; j++) if (P[j][0] * x + P[j][1] * y + P[j][2] * z + P[j][3] < -rad) vis = false;
+      if (vis) items[w++] = items[k];
+    }
+    items.length = w;
+  }
+}
 function axesM(pos, x, y, z, sx, sy, sz) {
   return new Float32Array([x[0] * sx, x[1] * sx, x[2] * sx, 0, y[0] * sy, y[1] * sy, y[2] * sy, 0, z[0] * sz, z[1] * sz, z[2] * sz, 0, pos[0], pos[1], pos[2], 1]);
 }
@@ -316,7 +333,7 @@ function render() {
     pass.setPipeline(GR.psMesh); pass.setVertexBuffer(0, GR.meshVB); pass.setIndexBuffer(GR.meshIB, 'uint32');
     drawGroups(pass, GR.shadowGroups, GR.staticIB, 'shadow');
     drawGroups(pass, GR.dynGroups, GR.dynIB);
-    if (heroVisible) {
+    if (heroVisible && !QUALITY[state.quality].fine) {
       pass.setPipeline(GR.psHero);
       pass.setVertexBuffer(0, GR.heroVB); pass.setVertexBuffer(1, GR.heroWB); pass.setIndexBuffer(GR.heroIB, 'uint32'); pass.drawIndexed(GR.heroCount);
       pass.setVertexBuffer(0, GR.capeVB); pass.setVertexBuffer(1, GR.capeWB); pass.setIndexBuffer(GR.capeIB, 'uint32'); pass.drawIndexed(GR.capeCount);
@@ -595,6 +612,8 @@ function showError(msg) {
 
 const LORE = ['«Donde cae una Chispa, la hierba recuerda el sol.»', '«Los Gruñones temen la luz, pero no la espada.»', '«El portal solo se abre para quien reúne la luz perdida.»', '«Brío aprendió a planear mirando las hojas del gran árbol.»'];
 async function boot() {
+  // installable app (PWA): offline cache + home-screen launch; skipped on the local test server
+  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
   const tick = () => new Promise(r => setTimeout(r, 30));
   const bar = document.getElementById('lbar'), pct = document.getElementById('lpct'), stg = document.getElementById('lstage'), lore = document.getElementById('llore'), ld = document.getElementById('loader');
   let li = Math.floor(Math.random() * LORE.length); lore.textContent = LORE[li];

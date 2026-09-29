@@ -4,6 +4,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0b1122">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-title" content="Brío">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Lilita+One&family=Nunito:wght@500;700;800;900&display=swap">
@@ -134,6 +137,20 @@ body.cine .lb{height:11vh}
 #touch .tb.punch{width:64px;height:64px;right:96px;bottom:6px}
 #touch .tb.dash{width:64px;height:64px;right:10px;bottom:98px}
 #touch .tb.pound{width:54px;height:54px;right:96px;bottom:92px}
+
+
+/* ---------- touch cluster: one ordered layout for every action button (right thumb), scales with screen height ---------- */
+#touch{--u:clamp(.78,calc(100vh / 430px),1.25)}
+body #touch .btns{position:absolute;right:calc(10px + env(safe-area-inset-right,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));width:calc(260px * var(--u));height:calc(260px * var(--u));pointer-events:none}
+body #touch .tb,body #touch #wtb{position:absolute!important;display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:1px;border-radius:50%!important;border:1.5px solid rgba(230,194,122,.55)!important;background:radial-gradient(circle at 50% 35%,rgba(40,44,70,.62),rgba(10,12,24,.62))!important;color:#f5e6c4!important;font-family:'Cinzel',serif!important;font-weight:700!important;letter-spacing:.04em;box-shadow:0 4px 14px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,240,210,.15);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);-webkit-user-select:none;user-select:none;transition:transform .06s,background .1s}
+body #touch .tb.on,body #touch #wtb.on{background:radial-gradient(circle at 50% 35%,#ffe7a8,#d7a948)!important;color:#1a1204!important;transform:scale(.94)}
+body #touch .tb.jump{width:calc(84px * var(--u))!important;height:calc(84px * var(--u))!important;right:0!important;bottom:0!important;font-size:calc(14px * var(--u))!important}
+body #touch .tb.punch{width:calc(70px * var(--u))!important;height:calc(70px * var(--u))!important;right:calc(94px * var(--u))!important;bottom:calc(8px * var(--u))!important;font-size:calc(12px * var(--u))!important}
+body #touch .tb.dash{width:calc(64px * var(--u))!important;height:calc(64px * var(--u))!important;right:calc(10px * var(--u))!important;bottom:calc(94px * var(--u))!important;font-size:calc(11px * var(--u))!important}
+body #touch .tb.pound{width:calc(56px * var(--u))!important;height:calc(56px * var(--u))!important;right:calc(90px * var(--u))!important;bottom:calc(88px * var(--u))!important;font-size:calc(10px * var(--u))!important}
+body #touch .tb.phys{width:calc(54px * var(--u))!important;height:calc(54px * var(--u))!important;right:calc(174px * var(--u))!important;bottom:calc(14px * var(--u))!important;font-size:calc(10px * var(--u))!important}
+body #touch #wtb{width:calc(52px * var(--u))!important;height:calc(52px * var(--u))!important;right:calc(18px * var(--u) + 10px + env(safe-area-inset-right,0px))!important;bottom:calc(172px * var(--u) + 10px + env(safe-area-inset-bottom,0px))!important;padding:0}
+body #touch #wtb svg{width:58%;height:58%}
 
 @media (max-width:720px){
   .overlay{align-items:flex-end;background:linear-gradient(0deg,rgba(14,16,32,.88) 0,rgba(14,16,32,.62) 55%,rgba(14,16,32,.1) 100%)}

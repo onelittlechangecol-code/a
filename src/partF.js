@@ -777,6 +777,7 @@ async function initRenderer(meshes) {
     }
     idata.set(m.i, io);
     GR.meshInfo[n] = { first: io, count: m.i.length, base: vo };
+    { let r = 0; for (let k = 0; k < m.vcount; k++) r = Math.max(r, Math.hypot(m.p[k * 3], m.p[k * 3 + 1], m.p[k * 3 + 2])); GR.meshInfo[n].r = r; }
     vo += m.vcount; io += m.i.length;
   }
   GR.meshVB = mk(vdata, U.VERTEX); GR.meshIB = mk(idata, U.INDEX);

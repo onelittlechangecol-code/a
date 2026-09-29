@@ -396,6 +396,19 @@ function buildMeshes() {
       for (let u = 0; u < S; u++) { const q = base + u * 2; g.tri(q, q + 1, q + 2); g.tri(q + 1, q + 3, q + 2); }
     }
     M.tuft = g;
+    // tuft_lo: seven wide single-segment blades for middle distance (12 triangles instead of 72)
+    const gl = new Mesh(); sd = 5;
+    for (let k = 0; k < 7; k++) {
+      const a = k / 7 * TAU + rnd() * 0.5, r0 = 0.02 + rnd() * 0.06, h = 0.38 + rnd() * 0.42, lean = 0.12 + rnd() * 0.22, w = 0.03 + rnd() * 0.012;
+      const d = [Math.sin(a), 0, Math.cos(a)], side = [Math.cos(a), 0, -Math.sin(a)], tone = 0.85 + rnd() * 0.3, base = gl.vcount;
+      for (let u = 0; u <= 1; u++) {
+        const t = u, p = V.add(V.mul(d, r0 + lean * t * t), [0, h * (t - 0.12 * t * t), 0]), ww = w * (1 - t * 0.92), n = V.norm(V.add(V.mul(d, 0.6), [0, 1.2, 0]));
+        const c = V.mul(V.lerp(V.mul(COL.grass, 0.68), COL.grass2, t), tone).concat([17]);
+        gl.v(V.add(p, V.mul(side, ww)), n, c); gl.v(V.sub(p, V.mul(side, ww)), n, c);
+      }
+      gl.tri(base, base + 1, base + 2); gl.tri(base + 1, base + 3, base + 2);
+    }
+    M.tuft_lo = gl;
   }
   {
     // wildflower: curved stem, two leaves, seven cupped petals round a domed centre (petal colour comes from the instance tint)
