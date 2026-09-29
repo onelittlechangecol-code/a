@@ -3210,6 +3210,16 @@ struct FOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
     c = mix(c, shade, m * 0.92);
   }
   c += F.sunCol.rgb * smoothstep(0.9990, 0.9996, dot(d, F.sunDir.xyz)) * 14.0;
+  // distant islands and ranges on the horizon: two hazy layers, only in some directions
+  let az = atan2(d.x, d.z);
+  for (var L = 0; L < 2; L++) {
+    let fl = f32(L);
+    let mask = smoothstep(0.3, 0.42, fbm(vec2f(az * 0.9 + fl * 5.3, 2.0 + fl)));
+    let ridge = (0.02 + 0.07 * fbm(vec2f(az * (6.0 + fl * 5.0), fl * 3.0)) + 0.02 * fbm(vec2f(az * 22.0, fl))) * mask * (1.0 - fl * 0.45);
+    let inM = step(d.y, ridge) * step(-0.02, d.y);
+    let haze = mix(vec3f(0.44, 0.55, 0.68), F.skyHor.rgb, 0.45 + fl * 0.3) * (0.9 + 0.2 * smoothstep(0.0, ridge + 1e-4, d.y));
+    c = mix(c, haze, inM * (0.85 - fl * 0.25));
+  }
   return vec4f(c, 1.0);
 }
 
