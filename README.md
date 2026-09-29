@@ -4,6 +4,17 @@ Un juego de plataformas y exploración en 3D, en un solo archivo (`index.html`),
 
 **Brío** es un aventurero de orejas puntiagudas, con espada, escudo y capa, al estilo de los juegos de acción y aventura en 3D. Su cuerpo es una malla deformada por un esqueleto de 17 huesos que se anima por completo con código.
 
+## Presentación
+
+- Pantalla de carga con emblema del sol, barra de progreso real por etapas (isla, rocas y árboles, armas, héroe, luz, cielo) y frases del mundo.
+- Pantalla de título cinematográfica con franjas de cine sobre la escena en 3D.
+- Cinemática de introducción con tres planos (grúa aérea sobre la isla, barrido por el prado y primer plano del héroe) y subtítulos que cuentan la historia de las Chispas. Se salta con cualquier tecla, clic o botón.
+- Interfaz limpia, sin guías: solo vida y chispas; las misiones aparecen como un rótulo breve; los controles y opciones están en el menú de pausa.
+
+## Código
+
+El juego se publica como un único `index.html`, generado desde `src/` con `python3 src/build.py`. Las pruebas están en `tools/`.
+
 ## Cómo jugar
 
 Abre `index.html` en un navegador con WebGPU (Chrome o Edge 113+, Safari 26+, Firefox 141+).

@@ -1,0 +1,8 @@
+[
+ {"js":"B=window.__brio;","frames":2,"shot":"title1"},
+ {"js":"document.getElementById('loader').classList.remove('done');document.getElementById('lbar').style.width='64%';document.getElementById('lpct').textContent='64%';document.getElementById('lstage').textContent='Esculpiendo al héroe';","frames":2,"shot":"load1"},
+ {"js":"document.getElementById('loader').style.transition='none';document.getElementById('loader').classList.add('done');B.startCine();","frames":120,"shot":"cine1"},
+ {"js":"","frames":300,"shot":"cine2"},
+ {"js":"","frames":300,"shot":"cine3"},
+ {"js":"","frames":220,"shot":"play1"}
+]

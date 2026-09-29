@@ -1,0 +1,9 @@
+[
+ {"js":"B=window.__brio;B.startGame();","frames":40},
+ {"js":"B.cam.yaw=B.player.yaw;B.cam.pitch=0.02;B.cam.dist=0.55;B.cam.curDist=0.55;B.cam.manualT=-100;B.cam.fov=30;","frames":3},
+ {"js":"B.cam.target=[B.player.pos[0],B.player.pos[1]+1.49,B.player.pos[2]];","frames":1,"shot":"face1"},
+ {"js":"B.cam.yaw=B.player.yaw+0.6;","frames":2},
+ {"js":"B.cam.target=[B.player.pos[0],B.player.pos[1]+1.49,B.player.pos[2]];","frames":1,"shot":"face2"},
+ {"js":"B.cam.yaw=B.player.yaw+1.5;","frames":2},
+ {"js":"B.cam.target=[B.player.pos[0],B.player.pos[1]+1.49,B.player.pos[2]];","frames":1,"shot":"face3"}
+]

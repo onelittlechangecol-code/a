@@ -1,0 +1,5 @@
+[
+ {"js":"B=window.__brio;B.startGame();","frames":40},
+ {"js":"B.cam.yaw=B.player.yaw+0.35;B.cam.pitch=0.05;B.cam.dist=1.5;B.cam.curDist=1.5;B.cam.manualT=-100;B.cam.fov=35;","frames":3},
+ {"js":"B.cam.target=[B.player.pos[0],B.player.pos[1]+0.45,B.player.pos[2]];","frames":1,"shot":"legs1"}
+]

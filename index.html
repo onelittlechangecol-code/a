@@ -6,7 +6,7 @@
 <title>Brío</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@500;700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Lilita+One&family=Nunito:wght@500;700;800;900&display=swap">
 <style>
 :root{
   color-scheme: dark;
@@ -70,6 +70,45 @@ button:focus-visible,.chip:focus-visible{outline:3px solid var(--sun);outline-of
 #err .card{background:var(--panel-solid);border:1px solid var(--line);border-radius:20px;padding:24px}
 #err h2{font-family:var(--display);font-weight:400;font-size:34px;margin:0}
 
+
+/* ---------- loader ---------- */
+#loader{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:radial-gradient(120% 90% at 50% 38%,#1b2a4a 0,#0b1122 55%,#04060d 100%);transition:opacity 1.1s ease,visibility 1.1s;overflow:hidden}
+#loader.done{opacity:0;visibility:hidden}
+#loader::before{content:"";position:absolute;inset:-30%;background:conic-gradient(from 0deg at 50% 45%,transparent 0 8%,rgba(255,207,90,.06) 10%,transparent 14% 30%,rgba(255,207,90,.05) 33%,transparent 37% 60%,rgba(120,170,255,.05) 63%,transparent 67% 85%,rgba(255,207,90,.05) 88%,transparent 92%);animation:rays 40s linear infinite}
+@keyframes rays{to{transform:rotate(360deg)}}
+.sigil{width:min(150px,32vw);height:auto;filter:drop-shadow(0 0 24px rgba(255,200,90,.45));animation:breathe 3.2s ease-in-out infinite}
+@keyframes breathe{50%{filter:drop-shadow(0 0 40px rgba(255,200,90,.75));transform:scale(1.03)}}
+.l-title{font-family:'Cinzel',serif;font-weight:900;font-size:clamp(46px,9vw,92px);letter-spacing:.32em;margin:0 0 0 .32em;color:#f5e6c4;text-shadow:0 0 30px rgba(255,200,110,.35),0 2px 0 #5a3d12;line-height:1}
+.l-sub{font-family:'Cinzel',serif;font-size:clamp(12px,2vw,15px);letter-spacing:.42em;text-transform:uppercase;color:#c9a35a;margin-top:-8px;text-align:center}
+.l-bar{position:relative;width:min(420px,72vw);height:2px;background:rgba(245,230,196,.14);margin-top:26px;overflow:visible}
+.l-bar i{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,#8a6420,#ffd98a);box-shadow:0 0 12px #ffcf6a;transition:width .35s ease}
+.l-bar i::after{content:"";position:absolute;right:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:#fff3d0;box-shadow:0 0 14px 4px rgba(255,210,120,.8)}
+.l-row{width:min(420px,72vw);display:flex;justify-content:space-between;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:rgba(245,230,196,.6);font-weight:700}
+.l-lore{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 40px);left:16px;right:16px;text-align:center;font-family:'Cinzel',serif;font-style:normal;font-size:clamp(13px,1.8vw,16px);color:rgba(245,230,196,.72);letter-spacing:.06em;transition:opacity .8s;max-width:640px;margin:auto;line-height:1.6}
+/* ---------- cinematic title + letterbox ---------- */
+.lb{position:fixed;left:0;right:0;height:0;background:#000;z-index:8;transition:height 1.2s cubic-bezier(.6,0,.2,1);pointer-events:none}
+.lb.top{top:0}.lb.bot{bottom:0}
+body.cine .lb{height:11vh}
+#intro.title-screen{align-items:flex-end;justify-content:center;background:linear-gradient(0deg,rgba(4,6,14,.82) 0,rgba(4,6,14,.35) 32%,rgba(4,6,14,0) 55%);padding-bottom:calc(13vh + env(safe-area-inset-bottom,0px))}
+.title-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;animation:rise 1.6s ease both .3s}
+@keyframes rise{from{opacity:0;transform:translateY(18px)}}
+.t-eyebrow{font-family:'Cinzel',serif;font-size:clamp(11px,1.6vw,14px);letter-spacing:.5em;text-transform:uppercase;color:#e6c27a;margin-left:.5em}
+.t-logo{font-family:'Cinzel',serif;font-weight:900;font-size:clamp(64px,13vw,150px);letter-spacing:.28em;margin:0 0 0 .28em;line-height:.95;color:#fbf1da;text-shadow:0 0 40px rgba(255,205,120,.4),0 3px 0 #6b4a17,0 10px 30px rgba(0,0,0,.6)}
+.t-rule{width:min(360px,60vw);height:1px;background:linear-gradient(90deg,transparent,#e6c27a,transparent)}
+.t-play{border:1px solid rgba(230,194,122,.7);background:rgba(10,12,24,.35);color:#fbf1da;font-family:'Cinzel',serif;font-weight:700;font-size:clamp(16px,2.2vw,20px);letter-spacing:.3em;padding:12px 34px 12px calc(34px + .3em);border-radius:2px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);transition:background .25s,color .25s,box-shadow .25s}
+.t-play:hover,.t-play:focus-visible{background:#e6c27a;color:#1a1204;box-shadow:0 0 30px rgba(230,194,122,.55)}
+.t-hint{font-size:11px;letter-spacing:.3em;text-transform:uppercase;color:rgba(251,241,218,.55);animation:blink 2.4s ease-in-out infinite}
+@keyframes blink{50%{opacity:.25}}
+#subs{position:fixed;left:16px;right:16px;bottom:calc(11vh + 22px);z-index:9;text-align:center;font-family:'Cinzel',serif;font-size:clamp(15px,2.3vw,22px);line-height:1.5;color:#fbf1da;text-shadow:0 2px 8px #000,0 0 2px #000;opacity:0;transition:opacity .9s;pointer-events:none;max-width:900px;margin:0 auto}
+#subs.on{opacity:1}
+#skipCine{position:fixed;right:18px;top:calc(11vh + 12px);z-index:9;font-size:11px;letter-spacing:.25em;text-transform:uppercase;color:rgba(251,241,218,.6);background:none;border:0}
+#quest{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 16%);transform:translateX(-50%);z-index:6;text-align:center;pointer-events:none;opacity:0;transition:opacity 1.2s}
+#quest.on{opacity:1}
+#quest small{display:block;font-family:'Cinzel',serif;font-size:12px;letter-spacing:.45em;color:#e6c27a;text-transform:uppercase}
+#quest b{display:block;font-family:'Cinzel',serif;font-weight:700;font-size:clamp(20px,3.2vw,32px);color:#fbf1da;letter-spacing:.08em;text-shadow:0 2px 12px rgba(0,0,0,.7);margin-top:6px}
+#quest::after{content:"";display:block;width:220px;height:1px;margin:10px auto 0;background:linear-gradient(90deg,transparent,#e6c27a,transparent)}
+.pause-opts{display:flex;gap:6px;flex-wrap:wrap}
+
 /* ---------- touch ---------- */
 #touch{position:fixed;inset:0;z-index:4;pointer-events:none}
 #touch .stick{position:absolute;left:0;top:0;bottom:0;width:45%;pointer-events:auto;touch-action:none}
@@ -98,20 +137,31 @@ button:focus-visible,.chip:focus-visible{outline:3px solid var(--sun);outline-of
 </style>
 </head>
 <body>
+<div id="loader" role="progressbar" aria-label="Cargando" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+  <svg class="sigil" viewBox="-60 -60 120 120" aria-hidden="true">
+    <defs><radialGradient id="sg" cx="40%" cy="35%"><stop offset="0" stop-color="#fff6d8"/><stop offset=".5" stop-color="#ffcf6a"/><stop offset="1" stop-color="#a86b12"/></radialGradient></defs>
+    <circle r="56" fill="none" stroke="#c9a35a" stroke-width="1.5" opacity=".7"/>
+    <circle r="50" fill="none" stroke="#c9a35a" stroke-width=".6" stroke-dasharray="2 4" opacity=".6"/>
+    <g fill="url(#sg)"><path d="M0 -44 L5 -20 L-5 -20 Z" transform="rotate(0)"/><path d="M0 -44 L5 -20 L-5 -20 Z" transform="rotate(30)"/><path d="M0 -44 L5 -20 L-5 -20 Z" transform="rotate(60)"/><path d="M0 -44 L5 -20 L-5 -20 Z" transform="rotate(90)"/><path d="M0 -44 L5 -20 L-5 -20 Z" transform="rotate(120)"/><path d="M0 -44 L5 -20 L-5 -20 Z" transform="rotate(150)"/><path d="M0 -44 L5 -20 L-5 -20 Z" transform="rotate(180)"/><path d="M0 -44 L5 -20 L-5 -20 Z" transform="rotate(210)"/><path d="M0 -44 L5 -20 L-5 -20 Z" transform="rotate(240)"/><path d="M0 -44 L5 -20 L-5 -20 Z" transform="rotate(270)"/><path d="M0 -44 L5 -20 L-5 -20 Z" transform="rotate(300)"/><path d="M0 -44 L5 -20 L-5 -20 Z" transform="rotate(330)"/><path d="M0 -34 L3 -20 L-3 -20 Z" transform="rotate(15)" opacity=".8"/><path d="M0 -34 L3 -20 L-3 -20 Z" transform="rotate(45)" opacity=".8"/><path d="M0 -34 L3 -20 L-3 -20 Z" transform="rotate(75)" opacity=".8"/><path d="M0 -34 L3 -20 L-3 -20 Z" transform="rotate(105)" opacity=".8"/><path d="M0 -34 L3 -20 L-3 -20 Z" transform="rotate(135)" opacity=".8"/><path d="M0 -34 L3 -20 L-3 -20 Z" transform="rotate(165)" opacity=".8"/><path d="M0 -34 L3 -20 L-3 -20 Z" transform="rotate(195)" opacity=".8"/><path d="M0 -34 L3 -20 L-3 -20 Z" transform="rotate(225)" opacity=".8"/><path d="M0 -34 L3 -20 L-3 -20 Z" transform="rotate(255)" opacity=".8"/><path d="M0 -34 L3 -20 L-3 -20 Z" transform="rotate(285)" opacity=".8"/><path d="M0 -34 L3 -20 L-3 -20 Z" transform="rotate(315)" opacity=".8"/><path d="M0 -34 L3 -20 L-3 -20 Z" transform="rotate(345)" opacity=".8"/></g>
+    <circle r="17" fill="url(#sg)"/><circle r="17" fill="none" stroke="#6b4a17" stroke-width="1"/>
+  </svg>
+  <h1 class="l-title">BRÍO</h1>
+  <div class="l-sub">Crónicas de la Isla de las Chispas</div>
+  <div class="l-bar"><i id="lbar"></i></div>
+  <div class="l-row"><span id="lstage">Despertando</span><span id="lpct">0%</span></div>
+  <p class="l-lore" id="llore"></p>
+</div>
 <canvas id="game" tabindex="0" aria-label="Juego 3D: Brío en la Isla de las Chispas"></canvas>
 
 <div class="hud" id="hud" hidden>
   <div class="hud-l">
     <div class="hearts" id="hearts" aria-label="Vida"></div>
     <div class="counter" aria-label="Chispas recogidas"><i class="spark"></i><b id="orbc">0</b><small>/ <span id="orbt">0</span></small><span class="bar"><i id="orbbar"></i></span></div>
-    <div class="objective" id="objective">Recoge chispas para despertar el santuario de la colina.</div>
+    <div class="objective" id="objective" hidden>Recoge chispas para despertar el santuario de la colina.</div>
   </div>
   <div class="hud-r">
-    <span class="timer" id="timer">0:00</span>
-    <button class="chip" id="skelBtn" aria-pressed="false" title="Ver esqueleto (B)">Esqueleto</button>
-    <button class="chip opt" id="muteBtn" aria-pressed="false" title="Silenciar (M)">Silencio</button>
-    <button class="chip opt" id="qualBtn" title="Calidad gráfica">Calidad: Alta</button>
-    <button class="chip" id="pauseBtn" title="Pausa (P)">Pausa</button>
+    <span class="timer" id="timer" hidden>0:00</span>
+    <button class="chip" id="pauseBtn" title="Pausa (P)" aria-label="Pausa">❚❚</button>
   </div>
 </div>
 <div id="toast" role="status" aria-live="polite"></div>
@@ -133,11 +183,31 @@ button:focus-visible,.chip:focus-visible{outline:3px solid var(--sun);outline-of
   </div>
 </div>
 
-<div class="overlay" id="intro">
+<div class="overlay title-screen" id="intro" hidden>
+  <div class="title-wrap">
+    <div class="t-eyebrow">Crónicas de la Isla de las Chispas</div>
+    <h1 class="t-logo">BRÍO</h1>
+    <div class="t-rule"></div>
+    <button class="t-play" id="playBtn">Nueva partida</button>
+    <div class="t-hint">Pulsa cualquier tecla</div>
+  </div>
+</div>
+<div class="lb top"></div><div class="lb bot"></div>
+<div id="subs" aria-live="polite"></div>
+<button id="skipCine" hidden>Saltar ▸</button>
+<div id="quest" aria-live="polite"><small id="questK">Misión</small><b id="questT"></b></div>
+
+<div class="overlay" id="pause" hidden>
   <div class="card">
-    <div class="eyebrow">Isla de las Chispas · motor propio en WebGPU</div>
-    <h1 class="logo">Br<span>í</span>o</h1>
-    <p class="lede">Brío es un aventurero de orejas puntiagudas con espada, escudo y una capa de tela simulada. Cada hueso de su esqueleto se anima por código: pies que pisan el terreno, codos y rodillas con cinemática inversa, pelo con resortes. Recoge chispas, despierta el santuario y cruza el portal.</p>
+    <div class="eyebrow">Pausa</div>
+    <h2 class="logo" style="font-size:clamp(56px,9vw,96px)">Un respiro</h2>
+    <button class="play" id="resumeBtn">Seguir</button>
+    <button class="chip" id="restartBtn" style="align-self:flex-start">Reiniciar la isla</button>
+    <div class="pause-opts">
+      <button class="chip" id="skelBtn" aria-pressed="false" title="Ver esqueleto (B)">Esqueleto</button>
+      <button class="chip" id="muteBtn" aria-pressed="false" title="Silenciar (M)">Silencio</button>
+      <button class="chip" id="qualBtn" title="Calidad gráfica">Calidad: Alta</button>
+    </div>
     <div class="tabs" role="tablist">
       <button role="tab" aria-selected="true" data-tab="kb">Teclado</button>
       <button role="tab" aria-selected="false" data-tab="pad">Mando</button>
@@ -166,17 +236,7 @@ button:focus-visible,.chip:focus-visible{outline:3px solid var(--sun);outline-of
       <dt>Derecha</dt><dd>Arrastra para mover la cámara</dd>
       <dt>Botones</dt><dd>Saltar (mantén para planear), Espada (mantén para girar), Esquivar, Estocada</dd>
     </dl>
-    <button class="play" id="playBtn">Jugar</button>
-    <p class="fine" id="introNote">Gráficos, física, animación y sonido generados por código en este archivo. Sin imágenes ni modelos externos.</p>
-  </div>
-</div>
 
-<div class="overlay" id="pause" hidden>
-  <div class="card">
-    <div class="eyebrow">Pausa</div>
-    <h2 class="logo" style="font-size:clamp(56px,9vw,96px)">Un respiro</h2>
-    <button class="play" id="resumeBtn">Seguir</button>
-    <button class="chip" id="restartBtn" style="align-self:flex-start">Reiniciar la isla</button>
   </div>
 </div>
 
@@ -2678,7 +2738,7 @@ function pickupsStep(dt) {
       updateHUD();
       if (stats.orbs === state.required) {
         state.shrineAwake = true; sfx('awake'); shake(0.3);
-        toast('El santuario despertó. Sube a la colina y cruza el portal.', 6);
+        showQuest('Nueva misión', 'El santuario despertó: cruza el portal', 6);
         document.getElementById('objective').textContent = 'Sube a la colina y cruza el portal del santuario.';
       }
     }
@@ -2753,6 +2813,13 @@ function cameraUpdate(dt, inputCam) {
     if (shot === 0) { cam.yaw = Math.PI * 0.86 + lerp(-0.25, 0.2, u); cam.pitch = lerp(-0.02, 0.06, u); cam.dist = lerp(1.7, 1.4, u); cam.target = V.add(p.pos, [0.3, 1.38, 0]); }
     else { cam.yaw = Math.PI * 0.8 + lerp(0.3, -0.1, u); cam.pitch = lerp(0.02, 0.12, u); cam.dist = lerp(3.6, 3.0, u); cam.target = V.add(p.pos, [0.6, 0.95, 0]); }
     cam.curDist = cam.dist;
+  } else if (state.mode === 'cine') {
+    // shot 1: aerial crane over the island toward the shrine; 2: low sweep across the meadow; 3: close on the hero
+    const t = CINE.t, e = (x) => x * x * (3 - 2 * x);
+    if (t < 5.2) { const u = e(t / 5.2); cam.target = V.add(V.lerp(SHRINE, p.pos, 0.35), [0, 2 - u * 1.5, 0]); cam.yaw = p.yaw + Math.PI + 0.9 - u * 0.7; cam.pitch = lerp(0.62, 0.34, u); cam.dist = lerp(70, 42, u); }
+    else if (t < 10.1) { const u = e((t - 5.2) / 4.9); cam.target = V.add(p.pos, [0, lerp(0.8, 1.25, u), 0]); cam.yaw = p.yaw + Math.PI + lerp(1.7, 0.55, u); cam.pitch = lerp(0.05, 0.16, u); cam.dist = lerp(11, 4.2, u); }
+    else { const u = e(clamp((t - 10.1) / 4.9, 0, 1)); cam.target = V.add(p.pos, [0, 1.47, 0]); cam.yaw = p.yaw + lerp(-0.55, -0.2, u); cam.pitch = lerp(0.1, 0.0, u); cam.dist = lerp(2.2, 1.45, u); }
+    cam.curDist = cam.dist;
   } else {
     cam.yaw += inputCam[0]; cam.pitch = clamp(cam.pitch + inputCam[1], -0.2, 1.15);
     if (Math.abs(inputCam[0]) + Math.abs(inputCam[1]) > 1e-4) cam.manualT = 0; else cam.manualT += dt;
@@ -2799,7 +2866,8 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyB') toggleSkeleton();
   if (e.code === 'KeyM') toggleMute();
   if (e.code === 'KeyP' || e.code === 'Escape') { if (state.mode === 'play') pauseGame(); else if (state.mode === 'pause') resumeGame(); }
-  if (e.code === 'Enter' && state.mode === 'title') startGame();
+  if (state.mode === 'title' && !document.getElementById('intro').hidden && !e.repeat) { e.preventDefault(); startGame(); }
+  else if (state.mode === 'cine' && !e.repeat) { e.preventDefault(); beginPlay(); }
   if (e.code === 'KeyR' && state.mode === 'play') { hurt(null, true); }
 });
 addEventListener('keyup', e => { const a = KEYMAP[e.code]; if (a) keys[a] = false; });
@@ -2882,7 +2950,8 @@ function readInput(dt) {
       if (edge(0)) press('jump'); if (edge(2)) press('punch'); if (edge(5) || edge(7)) press('dash'); if (edge(1)) press('pound');
       if (edge(8)) toggleSkeleton();
       if (edge(9)) pauseGame();
-    } else if (state.mode === 'title' && (edge(0) || edge(9))) startGame();
+    } else if (state.mode === 'title' && !document.getElementById('intro').hidden && (edge(0) || edge(9))) startGame();
+    else if (state.mode === 'cine' && (edge(0) || edge(9) || edge(1))) beginPlay();
     else if (state.mode === 'pause' && (edge(0) || edge(9))) resumeGame();
     else if (state.mode === 'win' && edge(0)) restartGame();
     jumpHeld = jumpHeld || b(0); punchHeld = punchHeld || b(2);
@@ -4278,7 +4347,7 @@ const STEP = 1 / 120;
 function frame(now) {
   const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now;
   const inp = readInput(dt);
-  if (state.mode === 'play' || state.mode === 'title') {
+  if (state.mode === 'play' || state.mode === 'title' || state.mode === 'cine') {
     const useIn = state.mode === 'play' ? inp : EMPTY_IN;
     if (state.hitstop > 0) { state.hitstop -= dt; }
     else {
@@ -4296,9 +4365,10 @@ function frame(now) {
       state.playTime += dt;
       const tt = fmtTime(state.playTime);
       if (tt !== frame.lastT) { document.getElementById('timer').textContent = tt; frame.lastT = tt; }
-      hintsStep(); musicStep(dt);
+      musicStep(dt);
     }
-    toastStep(dt);
+    if (state.mode === 'cine') cineStep(dt);
+    toastStep(dt); questStep(dt);
   }
   cameraUpdate(dt, state.mode === 'play' ? inp.cam : [0, 0]);
   if (!window.__skipRender) perfStep(dt);
@@ -4307,15 +4377,44 @@ function frame(now) {
 }
 
 function show(id, on) { document.getElementById(id).hidden = !on; }
-function startGame() {
-  player.swordOut = 0.5;
+// ---- cinematic intro: three shots with story subtitles, skippable at any time ----
+const CINE = { t: 0, len: 15, lines: [
+  [0.8, 5.0, 'Hace mil años, las Chispas guardaban la luz de esta isla.'],
+  [5.4, 9.8, 'Cuando el santuario se apagó, se dispersaron por la hierba… y los Gruñones despertaron.'],
+  [10.3, 14.6, 'Brío, el último guardián del Sol, jura devolverles la luz.']] };
+function startGame(cine = true) {
+  document.getElementById('loader').classList.add('done');
   initAudio(); if (AC && AC.state === 'suspended') AC.resume();
   sfx('ui');
+  show('intro', false);
+  if (!cine) { beginPlay(); return; }
+  state.mode = 'cine'; CINE.t = 0; cam.orbit = 0;
+  document.body.classList.add('cine'); show('skipCine', true);
+}
+function cineStep(dt) {
+  CINE.t += dt;
+  const line = CINE.lines.find(l => CINE.t >= l[0] && CINE.t < l[1]), el = document.getElementById('subs');
+  const txt = line ? line[2] : '';
+  if (txt && el.textContent !== txt) el.textContent = txt;
+  el.classList.toggle('on', !!line && CINE.t < line[1] - 0.6);
+  if (CINE.t >= CINE.len) beginPlay();
+}
+function beginPlay() {
+  player.swordOut = 0.5;
   state.mode = 'play';
-  show('intro', false); show('hud', true); show('touch', isTouch);
-  cam.yaw = player.yaw + Math.PI; cam.pitch = 0.32; cam.manualT = 0;
+  document.body.classList.remove('cine'); show('skipCine', false);
+  document.getElementById('subs').classList.remove('on');
+  show('hud', true); show('touch', isTouch);
+  cam.yaw = player.yaw + Math.PI; cam.pitch = 0.32; cam.manualT = 0; cam.dist = 5.6;
+  showQuest('Misión', 'Reúne las Chispas perdidas', 5.5);
   canvas.focus();
 }
+let questTimer = 0;
+function showQuest(kind, text, secs) {
+  document.getElementById('questK').textContent = kind; document.getElementById('questT').textContent = text;
+  document.getElementById('quest').classList.add('on'); questTimer = secs;
+}
+function questStep(dt) { if (questTimer > 0 && (questTimer -= dt) <= 0) document.getElementById('quest').classList.remove('on'); }
 function pauseGame() {
   if (state.mode !== 'play') return;
   state.mode = 'pause'; show('pause', true);
@@ -4381,25 +4480,42 @@ function showError(msg) {
   show('err', true); show('intro', false); show('hud', false);
 }
 
+const LORE = ['«Donde cae una Chispa, la hierba recuerda el sol.»', '«Los Gruñones temen la luz, pero no la espada.»', '«El portal solo se abre para quien reúne la luz perdida.»', '«Brío aprendió a planear mirando las hojas del gran árbol.»'];
 async function boot() {
+  const tick = () => new Promise(r => setTimeout(r, 30));
+  const bar = document.getElementById('lbar'), pct = document.getElementById('lpct'), stg = document.getElementById('lstage'), lore = document.getElementById('llore'), ld = document.getElementById('loader');
+  let li = Math.floor(Math.random() * LORE.length); lore.textContent = LORE[li];
+  const loreT = setInterval(() => { lore.style.opacity = 0; setTimeout(() => { li = (li + 1) % LORE.length; lore.textContent = LORE[li]; lore.style.opacity = 1; }, 800); }, 4200);
+  const step = async (p, label) => { bar.style.width = p + '%'; pct.textContent = Math.round(p) + '%'; stg.textContent = label; ld.setAttribute('aria-valuenow', Math.round(p)); await tick(); };
+  await step(4, 'Alzando la isla');
   buildWorld();
   for (const o of WORLD.orbs) { o.ox = o.x; o.oy = o.y; o.oz = o.z; }
   state.required = Math.max(1, WORLD.orbs.length - 8);
+  await step(22, 'Tallando rocas y árboles');
   MESHES = buildMeshes();
+  await step(40, 'Forjando espada y escudo');
   buildHeroProps(MESHES);
   buildGoblin(MESHES);
   buildLife(MESHES);
+  await step(55, 'Esculpiendo al héroe');
   HERO = buildHero();
   resetFoes();
   resetPlayer(START.slice(), Math.PI);
   updateHUD();
+  await step(72, 'Compilando la luz');
   try { await initRenderer(MESHES); }
   catch (e) {
+    clearInterval(loreT); ld.classList.add('done');
     showError((e && e.message ? e.message + ' ' : '') + 'Brío se dibuja con WebGPU y shaders WGSL. Ábrelo en Chrome o Edge 113+, Safari 26+ o Firefox 141+ con aceleración por hardware activada.');
     return;
   }
+  await step(90, 'Pintando el cielo');
+  try { cameraUpdate(0.016, [0, 0]); render(); } catch (_) { }
+  await step(100, 'Listo');
+  clearInterval(loreT);
+  setTimeout(() => { ld.classList.add('done'); show('intro', true); document.body.classList.add('cine'); document.getElementById('playBtn').focus(); }, 350);
   // wire UI
-  document.getElementById('playBtn').addEventListener('click', startGame);
+  document.getElementById('playBtn').addEventListener('click', () => startGame());
   document.getElementById('resumeBtn').addEventListener('click', resumeGame);
   document.getElementById('restartBtn').addEventListener('click', () => { show('pause', false); restartGame(); });
   document.getElementById('againBtn').addEventListener('click', restartGame);
@@ -4415,7 +4531,9 @@ async function boot() {
   if (isTouch) document.querySelector('.tabs button[data-tab="touch"]').click();
   setupTouch();
   addEventListener('resize', () => { });
-  window.__brio = { state, player, stats, WORLD, GR, foes, HERO, rig, cam, keys, input, press, startGame, toggleSkeleton };
+  window.__brio = { state, player, stats, WORLD, GR, foes, HERO, rig, cam, keys, input, press, startGame: () => startGame(false), startCine: () => startGame(true), toggleSkeleton };
+  document.getElementById('skipCine').addEventListener('click', () => { if (state.mode === 'cine') beginPlay(); });
+  document.getElementById('intro').addEventListener('click', (e) => { if (state.mode === 'title' && e.target.id !== 'playBtn') startGame(); });
   requestAnimationFrame(t => { last = t; requestAnimationFrame(frame); });
 }
 boot();

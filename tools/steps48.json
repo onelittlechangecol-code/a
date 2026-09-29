@@ -1,0 +1,4 @@
+[
+ {"js":"B=window.__brio;B.startGame();","frames":20},
+ {"js":"B.cam.manualT=-100;B.cam.yaw=B.player.yaw+Math.PI;B.cam.pitch=-0.35;B.cam.dist=4;B.cam.curDist=4;B.cam.fov=60;","frames":3,"shot":"sky1"}
+]
