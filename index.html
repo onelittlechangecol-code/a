@@ -964,7 +964,7 @@ for (const b of BONES) {
 const HC = {
   skin: mc('#ecbb96', 1), blush: mc('#e39a86', 1), lip: mc('#b4545a', 1), brow: mc('#6e4219', 7),
   tunic: mc('#1f6f8b', 2), tunicDark: mc('#15546b', 2), trim: mc('#d8a64c', 5), shirt: mc('#ece0c8', 2),
-  pants: mc('#2c3352', 2), leather: mc('#6b4428', 3), leatherLight: mc('#94603a', 3), leatherDark: mc('#3d2617', 3),
+  pants: mc('#36406a', 2), leather: mc('#6b4428', 3), leatherLight: mc('#94603a', 3), leatherDark: mc('#3d2617', 3),
   hair: mc('#d19a45', 7), hairDark: mc('#7a5024', 7), cape: mc('#a8242f', 2), capeIn: mc('#6c1720', 2),
   steel: mc('#a9b0b9', 4), gold: mc('#e2b24f', 5), wood: mc('#8b5a2b', 3), eyeW: mc('#f6f2ea', 6), iris: mc('#2b9c80', 6), irisDark: mc('#1c5f52', 6), pupil: mc('#0c0c10', 6),
   leaf: mc('#62b23b', 8), leafVein: mc('#3e7e27', 8), sole: mc('#2a1b12', 3), gem: mc('#5ff0ff', 6),
@@ -1424,11 +1424,18 @@ function buildHero() {
       const knee = G(t, 0, 0.92, 0, 0.1, 1) * Math.max(0, Math.sin(an)) * 0.15;
       return V.mul(V.lerp(HC.pants, [0.3, 0.33, 0.42], knee), seam).concat([2]);
     };
-    P(wrinkle(tubeMesh(hp, kn, t => lerp(0.08, 0.056, t) + Math.sin(t * Math.PI) * 0.006, pantsCol, 32, 30), hp, kn,
-      (t, an) => 0.0035 * Math.max(0, Math.sin(t * 38 + Math.sin(an * 2) * 1.5)) * smooth(0.65, 0.95, t) * Math.max(0, -Math.sin(an) + 0.3)
-        + 0.0015 * Math.sin(an * 5 + t * 4) * smooth(0.1, 0.5, t)), [BI.thigh(s), BI.pelvis, BI.shin(s)]);
-    P(tubeMesh(kn, an, t => t < 0.34 ? lerp(0.055, 0.05, t / 0.34) : (t < 0.44 ? 0.064 : lerp(0.058, 0.046, (t - 0.44) / 0.56)),
-      (t) => t < 0.34 ? HC.pants : (t < 0.44 ? HC.leatherLight : HC.leather), 20, 14), [BI.shin(s), BI.thigh(s), BI.foot(s)]);
+    // folds: diagonal drag lines fanning from the crotch to the outer thigh, stacked folds over and behind the knee
+    P(wrinkle(tubeMesh(hp, kn, t => lerp(0.08, 0.056, t) + Math.sin(t * Math.PI) * 0.006, pantsCol, 72, 64), hp, kn,
+      (t, an) => {
+        const u = s > 0 ? Math.abs(an) : Math.PI - Math.abs(an), front = Math.max(0, Math.sin(an) + 0.25);
+        const drag = Math.pow(Math.max(0, Math.sin(u * 2.6 - t * 15 + Math.sin(an * 3) * 0.6)), 1.6) * smooth(0.02, 0.2, t) * (1 - smooth(0.45, 0.7, t)) * (1 - u / Math.PI * 0.7) * front;
+        const stack = Math.pow(Math.max(0, Math.sin(t * 42 + Math.sin(an * 2) * 1.8)), 1.4) * smooth(0.62, 0.95, t) * (Math.max(0, -Math.sin(an) + 0.3) + 0.35 * front);
+        return 0.0055 * (drag - 0.3 * smooth(0.02, 0.2, t) * (1 - smooth(0.45, 0.7, t)) * front) + 0.005 * (stack - 0.3 * smooth(0.62, 0.95, t)) + 0.0015 * Math.sin(an * 5 + t * 4) * smooth(0.1, 0.5, t);
+      }), [BI.thigh(s), BI.pelvis, BI.shin(s)]);
+    // shin: cloth bunching in soft rolls where it tucks into the boot
+    P(wrinkle(tubeMesh(kn, an, t => t < 0.34 ? lerp(0.055, 0.05, t / 0.34) : (t < 0.44 ? 0.064 : lerp(0.058, 0.046, (t - 0.44) / 0.56)),
+      (t) => t < 0.34 ? HC.pants : (t < 0.44 ? HC.leatherLight : HC.leather), 48, 60), kn, an,
+      (t, a) => t < 0.33 ? 0.0045 * smooth(0.08, 0.3, t) * (-0.35 + Math.pow(Math.max(0, Math.sin(t * 95 + Math.sin(a * 3) * 2.2 + a)), 1.3)) : 0), [BI.shin(s), BI.thigh(s), BI.foot(s)]);
     // knee cop: ridged steel cup, a fan wing on the outer side, small lames above and below, gold rims, strap behind
     {
       const stD = [0.28, 0.3, 0.34, 4], stL = [0.5, 0.52, 0.56, 4], kc = V.add(kn, [0, 0.005, 0.048]);
