@@ -8,6 +8,7 @@ function frameUniforms() {
   const proj = M4.perspective(cam.curFov * Math.PI / 180, asp, 0.1, 900);
   const view = M4.lookAt(cam.pos, cam.target, [0, 1, 0]);
   const vp = M4.mul(proj, view);
+  GR.frustum = frustumPlanes(vp);
   // stable shadow frustum: snap the light-space centre to whole texels
   const lv = M4.lookAt(V.mul(SUN, 200), [0, 0, 0], [0, 1, 0]);
   const center = V.add(player.pos, V.mul([Math.sin(cam.yaw), 0, Math.cos(cam.yaw)], -8));
@@ -262,9 +263,24 @@ function buildParticles() {
   if (n) GR.device.queue.writeBuffer(GR.partVB, 0, d, 0, n * 8);
 }
 
-function drawGroups(pass, groups, instBuf) {
+function frustumPlanes(m) {
+  const row = (i) => [m[i], m[4 + i], m[8 + i], m[12 + i]], r0 = row(0), r1 = row(1), r2 = row(2), r3 = row(3);
+  return [V4add(r3, r0), V4sub(r3, r0), V4add(r3, r1), V4sub(r3, r1), r2, V4sub(r3, r2)].map(p => { const l = Math.hypot(p[0], p[1], p[2]) || 1; return [p[0] / l, p[1] / l, p[2] / l, p[3] / l]; });
+}
+const V4add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2], a[3] + b[3]], V4sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2], a[3] - b[3]];
+// culling modes: 'view' = camera frustum + grass draw distance; 'fine' = near the hero (fine shadow cascade); none = draw all
+function groupVisible(g, mode) {
+  const b = g.b; if (!b || !mode) return true;
+  if (mode === 'fine') return Math.hypot(b[0] - player.pos[0], b[2] - player.pos[2]) < 22 + b[3];
+  if (mode === 'shadow') return Math.hypot(b[0] - player.pos[0], b[2] - player.pos[2]) < 60 + b[3];
+  if (g.small) { const Q = QUALITY[state.quality]; if (Math.hypot(b[0] - cam.pos[0], b[2] - cam.pos[2]) > (Q.grassDist || 60) + b[3]) return false; }
+  for (const p of GR.frustum) if (p[0] * b[0] + p[1] * b[1] + p[2] * b[2] + p[3] < -b[3]) return false;
+  return true;
+}
+function drawGroups(pass, groups, instBuf, cull) {
   pass.setVertexBuffer(1, instBuf);
   for (const g of groups) {
+    if (cull && !groupVisible(g, cull)) continue;
     const mi = GR.meshInfo[g.mesh];
     pass.drawIndexed(mi.count, g.count, mi.first, mi.base, g.first);
   }
@@ -280,6 +296,7 @@ function render() {
   if (!GR.identIB) { GR.identIB = GR.device.createBuffer({ size: INST_FLOATS * 4, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST }); GR.device.queue.writeBuffer(GR.identIB, 0, identityInst); }
   buildParticles();
   if (state.debug && rig.init) buildLines();
+  if (!GR.shadowGroups || GR.shadowGroupsSrc !== GR.staticGroups) { GR.shadowGroups = GR.staticGroups.filter(g => !GR.shadowSkip.has(g.mesh)); GR.shadowGroupsSrc = GR.staticGroups; }
   const d = GR.device, enc = d.createCommandEncoder();
 
   // --- shadow pass ---
@@ -288,7 +305,7 @@ function render() {
     pass.setBindGroup(0, GR.shadowBG);
     pass.setPipeline(GR.psTerrain); pass.setVertexBuffer(0, GR.terrVB); pass.setIndexBuffer(GR.terrIB, 'uint32'); pass.drawIndexed(GR.terrCount);
     pass.setPipeline(GR.psMesh); pass.setVertexBuffer(0, GR.meshVB); pass.setIndexBuffer(GR.meshIB, 'uint32');
-    drawGroups(pass, GR.staticGroups.filter(g => !GR.shadowSkip.has(g.mesh)), GR.staticIB);
+    drawGroups(pass, GR.shadowGroups, GR.staticIB, 'shadow');
     drawGroups(pass, GR.dynGroups, GR.dynIB);
     if (heroVisible) {
       pass.setPipeline(GR.psHero);
@@ -304,7 +321,7 @@ function render() {
     pass.setBindGroup(0, GR.shadowBG);
     pass.setPipeline(GR.psTerrain2); pass.setVertexBuffer(0, GR.terrVB); pass.setIndexBuffer(GR.terrIB, 'uint32'); pass.drawIndexed(GR.terrCount);
     pass.setPipeline(GR.psMesh2); pass.setVertexBuffer(0, GR.meshVB); pass.setIndexBuffer(GR.meshIB, 'uint32');
-    drawGroups(pass, GR.staticGroups.filter(g => !GR.shadowSkip.has(g.mesh)), GR.staticIB);
+    drawGroups(pass, GR.shadowGroups, GR.staticIB, 'fine');
     drawGroups(pass, GR.dynGroups, GR.dynIB);
     if (heroVisible) {
       pass.setPipeline(GR.psHero2);
@@ -324,7 +341,7 @@ function render() {
     pass.setPipeline(GR.pSkyR); pass.draw(3);
     pass.setPipeline(GR.pTerrainR); pass.setVertexBuffer(0, GR.terrVB); pass.setIndexBuffer(GR.terrIB, 'uint32'); pass.drawIndexed(GR.terrCount);
     pass.setPipeline(GR.pMeshR); pass.setVertexBuffer(0, GR.meshVB); pass.setIndexBuffer(GR.meshIB, 'uint32');
-    drawGroups(pass, GR.staticGroups.filter(g => !GR.shadowSkip.has(g.mesh)), GR.staticIB);
+    drawGroups(pass, GR.shadowGroups, GR.staticIB);
     drawGroups(pass, GR.dynGroups, GR.dynIB);
     if (heroVisible) {
       pass.setPipeline(GR.pHeroR);
@@ -344,7 +361,7 @@ function render() {
     pass.setPipeline(GR.pSky); pass.draw(3);
     pass.setPipeline(GR.pTerrain); pass.setVertexBuffer(0, GR.terrVB); pass.setIndexBuffer(GR.terrIB, 'uint32'); pass.drawIndexed(GR.terrCount);
     pass.setPipeline(GR.pMesh); pass.setVertexBuffer(0, GR.meshVB); pass.setIndexBuffer(GR.meshIB, 'uint32');
-    drawGroups(pass, Q.grass ? GR.staticGroups : GR.staticGroups.filter(g => !GR.shadowSkip.has(g.mesh)), GR.staticIB);
+    drawGroups(pass, Q.grass ? GR.staticGroups : GR.shadowGroups, GR.staticIB, 'view');
     drawGroups(pass, GR.dynGroups, GR.dynIB);
     if (heroVisible) {
       pass.setPipeline(GR.pHero);
@@ -370,7 +387,7 @@ function render() {
 // ============================================================
 //  Game flow + main loop
 // ============================================================
-const state = { quality: (() => { try { return localStorage.getItem('brio-quality') || (isTouch ? 'media' : 'alta'); } catch (_) { return isTouch ? 'media' : 'alta'; } })(), mode: 'title', time: 0, playTime: 0, required: 0, shrineAwake: false, won: false, hitstop: 0, debug: false };
+const state = { quality: (() => { try { return localStorage.getItem('brio-quality2') || (isTouch ? 'baja' : 'media'); } catch (_) { return isTouch ? 'baja' : 'media'; } })(), mode: 'title', time: 0, playTime: 0, required: 0, shrineAwake: false, won: false, hitstop: 0, debug: false };
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let HERO = null, MESHES = null;
 function hitstop(t) { state.hitstop = Math.max(state.hitstop, t); }
@@ -520,21 +537,27 @@ function restartGame() {
 }
 function setQuality(q, auto = false) {
   state.quality = q; GR.w = 0;
-  try { localStorage.setItem('brio-quality', q); } catch (_) { }
+  if (state.qualityManual) { try { localStorage.setItem('brio-quality2', q); } catch (_) { } }
   const b = document.getElementById('qualBtn'); if (b) b.textContent = 'Calidad: ' + QUALITY[q].label;
-  if (auto) toast('Calidad ajustada a ' + QUALITY[q].label + ' para mantener la fluidez.', 4);
 }
 function cycleQuality() { const order = ['alta', 'media', 'baja']; setQuality(order[(order.indexOf(state.quality) + 1) % 3]); }
 const perf = { t: 0, n: 0, slow: 0 };
+// adaptive performance: dynamic resolution first (every second), then quality presets; aims at ~60 fps on any device
 function perfStep(dt) {
-  if (state.mode !== 'play') return;
+  if (state.mode !== 'play' && state.mode !== 'cine' && state.mode !== 'title') return;
   perf.t += dt; perf.n++;
-  if (perf.t >= 2) {
-    const avg = perf.t / perf.n;
-    perf.slow = avg > 1 / 32 ? perf.slow + 1 : 0;
-    if (perf.slow >= 2 && state.quality !== 'baja' && !state.qualityManual) { setQuality(state.quality === 'alta' ? 'media' : 'baja', true); perf.slow = 0; }
-    perf.t = 0; perf.n = 0;
-  }
+  if (perf.t < 1) return;
+  const avg = perf.t / perf.n; perf.t = 0; perf.n = 0;
+  const rs = GR.rscale || 1;
+  if (avg > 1 / 50) {
+    perf.fast = 0;
+    if (rs > 0.55) GR.rscale = Math.max(0.55, rs * (avg > 1 / 30 ? 0.75 : 0.88));
+    else if (!state.qualityManual && state.quality !== 'baja') { perf.ceiling = state.quality; setQuality(state.quality === 'alta' ? 'media' : 'baja', true); GR.rscale = 0.8; }
+  } else if (avg < 1 / 57) {
+    perf.fast = (perf.fast || 0) + 1;
+    if (perf.fast >= 2 && rs < 1) { GR.rscale = Math.min(1, rs * 1.08); perf.fast = 0; }
+    else if (perf.fast >= 6 && rs >= 1 && !state.qualityManual && state.quality !== 'alta' && perf.ceiling !== (state.quality === 'baja' ? 'media' : 'alta')) { setQuality(state.quality === 'baja' ? 'media' : 'alta'); perf.fast = 0; }
+  } else perf.fast = 0;
 }
 function toggleSkeleton() {
   state.debug = !state.debug;

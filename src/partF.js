@@ -702,9 +702,9 @@ struct Post { sun: vec4f, fx: vec4f };
 
 const GR = {}; // renderer state
 const QUALITY = {
-  alta: { label: 'Alta', dpr: 2, maxPix: 2560 * 1440, refl: true, fine: true, grass: true },
-  media: { label: 'Media', dpr: 1.25, maxPix: 1920 * 1080, refl: true, fine: true, grass: true },
-  baja: { label: 'Baja', dpr: 1, maxPix: 1280 * 720, refl: false, fine: false, grass: false },
+  alta: { label: 'Alta', dpr: 1.5, maxPix: 1920 * 1080, refl: true, fine: true, grass: true, grassDist: 90 },
+  media: { label: 'Media', dpr: 1, maxPix: 1600 * 900, refl: false, fine: true, grass: true, grassDist: 60 },
+  baja: { label: 'Baja', dpr: 1, maxPix: 1024 * 576, refl: false, fine: false, grass: true, grassDist: 32 },
 };
 const FRAME_FLOATS = 148;
 const INST_FLOATS = 24;
@@ -869,7 +869,7 @@ async function initRenderer(meshes) {
 function resizeTargets() {
   const d = GR.device;
   const Q = QUALITY[state.quality] || QUALITY.alta;
-  const dpr = Math.min(window.devicePixelRatio || 1, Q.dpr);
+  const dpr = Math.min(window.devicePixelRatio || 1, Q.dpr) * (GR.rscale || 1);
   let w = Math.max(2, Math.floor(canvas.clientWidth * dpr)), h = Math.max(2, Math.floor(canvas.clientHeight * dpr));
   const maxPix = Q.maxPix, pix = w * h;
   if (pix > maxPix) { const s = Math.sqrt(maxPix / pix); w = Math.floor(w * s); h = Math.floor(h * s); }
@@ -881,8 +881,9 @@ function resizeTargets() {
   GR.msDepth = d.createTexture({ size: [w, h], format: 'depth24plus', sampleCount: 4, usage: RA });
   GR.hdr = d.createTexture({ size: [w, h], format: 'rgba16float', usage: RA | TB });
   const bw = Math.max(1, w >> 1), bh = Math.max(1, h >> 1);
-  GR.reflColor = d.createTexture({ size: [bw, bh], format: 'rgba16float', usage: RA | TB });
-  GR.reflDepth = d.createTexture({ size: [bw, bh], format: 'depth24plus', usage: RA });
+  const rw = Math.max(1, w >> 2), rh = Math.max(1, h >> 2);
+  GR.reflColor = d.createTexture({ size: [rw, rh], format: 'rgba16float', usage: RA | TB });
+  GR.reflDepth = d.createTexture({ size: [rw, rh], format: 'depth24plus', usage: RA });
   GR.sceneBG = GR.makeSceneBG(GR.frameUB, GR.reflColor.createView());
   GR.bloomA = d.createTexture({ size: [bw, bh], format: 'rgba16float', usage: RA | TB });
   GR.bloomB = d.createTexture({ size: [bw, bh], format: 'rgba16float', usage: RA | TB });
@@ -896,38 +897,47 @@ function resizeTargets() {
 
 // ---------- instance packing ----------
 function packInstances(list, out, start = 0) {
-  // list: Map meshName -> array of [M(16), tint(4), prm(4)]
+  // list: Map meshName -> array of [M(16), tint(4), prm(4)]; a key 'mesh#cell' marks a spatial chunk that gets culling bounds
   const groups = [];
   let n = start;
-  for (const [mesh, items] of list) {
+  for (const [key, items] of list) {
     if (!items.length) continue;
-    const first = n;
+    const first = n, hash = key.indexOf('#'), mesh = hash < 0 ? key : key.slice(0, hash);
+    let x0 = 1e9, y0 = 1e9, z0 = 1e9, x1 = -1e9, y1 = -1e9, z1 = -1e9, sc = 0;
     for (const it of items) {
       if (n >= out.length / INST_FLOATS) break;
       out.set(it[0], n * INST_FLOATS); out.set(it[1], n * INST_FLOATS + 16); out.set(it[2], n * INST_FLOATS + 20);
+      if (it[3] !== undefined) GR.instSlot[it[3]] = n;
+      if (hash >= 0) { const M = it[0]; x0 = Math.min(x0, M[12]); x1 = Math.max(x1, M[12]); y0 = Math.min(y0, M[13]); y1 = Math.max(y1, M[13]); z0 = Math.min(z0, M[14]); z1 = Math.max(z1, M[14]); sc = Math.max(sc, Math.hypot(M[0], M[1], M[2]), Math.hypot(M[4], M[5], M[6])); }
       n++;
     }
-    groups.push({ mesh, first, count: n - first });
+    const g = { mesh, first, count: n - first };
+    if (hash >= 0) { const pad = (mesh.startsWith('canopy') || mesh === 'trunk' ? 4 : 1.6) * Math.max(1, sc); g.b = [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2, Math.hypot(x1 - x0, y1 - y0, z1 - z0) / 2 + pad]; g.small = mesh === 'tuft' || mesh === 'flower'; }
+    groups.push(g);
   }
   return { groups, n };
 }
+// which spatial chunk a prop at (x, z) belongs to
+const CHUNK = 16;
+const chunkKey = (mesh, x, z) => mesh + '#' + Math.floor(x / CHUNK) + ',' + Math.floor(z / CHUNK);
 class InstList {
   constructor() { this.map = new Map(); }
-  add(mesh, M, tint = [1, 1, 1, 0], prm = [0.6, 0, 0, 0]) { if (!this.map.has(mesh)) this.map.set(mesh, []); this.map.get(mesh).push([M, tint, prm]); }
+  add(mesh, M, tint = [1, 1, 1, 0], prm = [0.6, 0, 0, 0], tag) { if (!this.map.has(mesh)) this.map.set(mesh, []); this.map.get(mesh).push(tag === undefined ? [M, tint, prm] : [M, tint, prm, tag]); }
 }
 function buildStaticInstances() {
   const L = new InstList(), P = WORLD.props;
+  GR.instSlot = {};
   for (const t of P.trees) {
     const m = at(t.x, t.y - 0.2, t.z); M4.rotY(m, t.yaw); M4.scale(m, t.s);
-    L.add('trunk', m, [1, 1, 1, 0], [0.85, 0, 0, 0]);
+    L.add(chunkKey('trunk', t.x, t.z), m, [1, 1, 1, 0], [0.85, 0, 0, 0]);
     const c = at(t.x, t.y + 3.4 * t.s + 0.6 * t.s, t.z); M4.rotY(c, t.yaw); M4.scale(c, 1.75 * t.s, 1.45 * t.s, 1.75 * t.s);
-    L.add('canopy' + t.v, c, [1, 1, 1, 0], [0.8, 0.25, 0.05, 1.0]);
+    L.add(chunkKey('canopy' + t.v, t.x, t.z), c, [1, 1, 1, 0], [0.8, 0.25, 0.05, 1.0]);
     const c2 = at(t.x + Math.sin(t.yaw) * 0.9 * t.s, t.y + 2.9 * t.s, t.z + Math.cos(t.yaw) * 0.9 * t.s); M4.scale(c2, 1.05 * t.s);
-    L.add('canopy' + ((t.v + 1) % 3), c2, [1, 1, 1, 0], [0.8, 0.25, 0.05, 1.0]);
+    L.add(chunkKey('canopy' + ((t.v + 1) % 3), t.x, t.z), c2, [1, 1, 1, 0], [0.8, 0.25, 0.05, 1.0]);
   }
-  for (const r of P.rocks) { const m = at(r.x, r.y - 0.15 * r.s, r.z); M4.rotY(m, r.yaw); M4.scale(m, r.s, r.s * 0.8, r.s); L.add('rock' + r.v, m, [1, 1, 1, 0], [0.85, 0.1, 0, 0]); }
-  for (const t of P.tufts) { const m = at(t.x, t.y - 0.03, t.z); M4.rotY(m, t.yaw); M4.scale(m, t.s, t.s * (0.8 + 0.5 * hash2(Math.floor(t.x * 7), Math.floor(t.z * 7))), t.s); const k = 0.82 + 0.3 * hash2(Math.floor(t.x * 3), Math.floor(t.z * 3)); L.add('tuft', m, [k, k * (0.95 + 0.1 * hash2(Math.floor(t.z), 5)), k * 0.9, 0], [0.9, 0, 0.12, 0]); }
-  for (const f of P.flowers) { const m = at(f.x, f.y - 0.02, f.z); M4.rotY(m, f.yaw); M4.scale(m, f.s); L.add('flower', m, [...f.c, 0.05], [0.8, 0, 0.1, 0]); }
+  for (const r of P.rocks) { const m = at(r.x, r.y - 0.15 * r.s, r.z); M4.rotY(m, r.yaw); M4.scale(m, r.s, r.s * 0.8, r.s); L.add(chunkKey('rock' + r.v, r.x, r.z), m, [1, 1, 1, 0], [0.85, 0.1, 0, 0]); }
+  for (let ti = 0; ti < P.tufts.length; ti++) { const t = P.tufts[ti]; const m = at(t.x, t.y - 0.03, t.z); M4.rotY(m, t.yaw); M4.scale(m, t.s, t.s * (0.8 + 0.5 * hash2(Math.floor(t.x * 7), Math.floor(t.z * 7))), t.s); const k = 0.82 + 0.3 * hash2(Math.floor(t.x * 3), Math.floor(t.z * 3)); L.add(chunkKey('tuft', t.x, t.z), m, [k, k * (0.95 + 0.1 * hash2(Math.floor(t.z), 5)), k * 0.9, 0], [0.9, 0, 0.12, 0], 't' + ti); }
+  for (let fi = 0; fi < P.flowers.length; fi++) { const f = P.flowers[fi]; const m = at(f.x, f.y - 0.02, f.z); M4.rotY(m, f.yaw); M4.scale(m, f.s); L.add(chunkKey('flower', f.x, f.z), m, [...f.c, 0.05], [0.8, 0, 0.1, 0], 'f' + fi); }
   for (const p of WORLD.pillars) { const m = at(p.x, SHRINE[1] + 0.75, p.z); M4.rotY(m, p.a); L.add('pillar', m, [1, 1, 1, 0], [0.8, 0.1, 0, 0]); }
   for (const [r, top] of [[7.5, 0.27], [7.15, 0.54], [6.8, 0.8]]) { const m = at(SHRINE[0], SHRINE[1] - 0.6, SHRINE[2]); M4.scale(m, r, top + 0.6, r); L.add('shrineStep', m, [1, 1, 1, 0], [0.85, 0, 0, 0]); }
   const ring = at(SHRINE[0], SHRINE[1] + 0.8 + 2.6, SHRINE[2]); M4.rotX(ring, Math.PI / 2);

@@ -1,0 +1,22 @@
+import { chromium } from '/opt/node22/lib/node_modules/playwright/index.mjs';
+const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-angle=swiftshader','--use-webgpu-adapter=swiftshader','--enable-unsafe-swiftshader','--enable-unsafe-webgpu'] });
+const p = await b.newPage({ viewport: { width: 960, height: 540 } });
+await p.addInitScript({ path: 'harness.js' });
+await p.goto((process.env.BASE||'http://localhost:8766/') + 'index.html?v=' + Date.now());
+await p.waitForFunction(() => window.__brio, null, { timeout: 90000, polling: 300 });
+const r = await p.evaluate(async () => {
+  const B = window.__brio; B.startGame(); await window.__advance(30);
+  const time = async () => { await window.__advance(1); const t = performance.now(); for (let i = 0; i < 4; i++) await window.__advance(1); return +((performance.now() - t) / 4).toFixed(0); };
+  const out = {};
+  out.base = await time();
+  const Q = QUALITY[state.quality];
+  Q.refl = false; out.noRefl = await time();
+  Q.fine = false; out.noReflFine = await time();
+  Q.grass = false; out.noReflFineGrass = await time();
+  Q.refl = true; Q.fine = true; Q.grass = true;
+  const sd = GR.shadowSkip; 
+  out.q = state.quality; out.res = GR.w + 'x' + GR.h;
+  return out;
+});
+console.log(JSON.stringify(r));
+await b.close();

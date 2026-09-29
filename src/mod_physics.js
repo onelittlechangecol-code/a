@@ -1120,19 +1120,19 @@ function phScorch(id) {
     }
     GR.device.queue.writeBuffer(GR.terrVB, (jj * (N + 1) + i0) * 40, row);
   }
-  const grp = (name) => GR.staticGroups && GR.staticGroups.find(g => g.mesh === name);
-  const tg = grp('tuft'), fg = grp('flower'), one = new Float32Array(INST_FLOATS);
-  if (tg && PHF.tufts[id]) for (const k of PHF.tufts[id]) {
-    const t = WORLD.props.tufts[k]; if (k >= tg.count) continue;
+  // each tuft/flower instance slot is recorded at build time (props are packed in spatial chunks)
+  const slot = (tag) => GR.instSlot ? GR.instSlot[tag] : undefined, one = new Float32Array(INST_FLOATS);
+  if (PHF.tufts[id]) for (const k of PHF.tufts[id]) {
+    const t = WORLD.props.tufts[k], n = slot('t' + k); if (n === undefined) continue;
     const m = at(t.x, t.y - 0.03, t.z); M4.rotY(m, t.yaw); M4.scale(m, t.s * 0.7, t.s * 0.18, t.s * 0.7);
     one.set(m, 0); one.set([0.06, 0.05, 0.04, 0], 16); one.set([0.9, 0, 0.02, 0], 20);
-    GR.device.queue.writeBuffer(GR.staticIB, (tg.first + k) * INST_FLOATS * 4, one);
+    GR.device.queue.writeBuffer(GR.staticIB, n * INST_FLOATS * 4, one);
   }
-  if (fg && PHF.flowers[id]) for (const k of PHF.flowers[id]) {
-    const f = WORLD.props.flowers[k]; if (k >= fg.count) continue;
+  if (PHF.flowers[id]) for (const k of PHF.flowers[id]) {
+    const f = WORLD.props.flowers[k], n = slot('f' + k); if (n === undefined) continue;
     const m = at(f.x, f.y - 0.3, f.z); M4.scale(m, 0.001);
     one.set(m, 0); one.set([0, 0, 0, 0], 16); one.set([0.8, 0, 0, 0], 20);
-    GR.device.queue.writeBuffer(GR.staticIB, (fg.first + k) * INST_FLOATS * 4, one);
+    GR.device.queue.writeBuffer(GR.staticIB, n * INST_FLOATS * 4, one);
   }
 }
 // explosions: damage, impulses, fire, particles and a shake
