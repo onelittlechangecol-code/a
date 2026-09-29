@@ -761,7 +761,7 @@ async function initRenderer(meshes) {
   GR.trailData = new Float32Array(16 * 12 * 7);
   GR.trailVB = empty(GR.trailData.byteLength, U.VERTEX);
   // instances
-  GR.maxDyn = 1024;
+  GR.maxDyn = 2048;
   GR.dynData = new Float32Array(GR.maxDyn * INST_FLOATS);
   GR.dynIB = empty(GR.dynData.byteLength, U.VERTEX);
   GR.staticGroups = buildStaticInstances();
