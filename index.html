@@ -450,7 +450,19 @@ const COL = {
 function buildMeshes() {
   const M = {};
   M.sphere = sphereMesh(28, 18);
-  M.orb = icoMesh(1, [1, 1, 1]);
+  // spark: a cut crystal (eight-sided, elongated, bevelled girdle) with a thin halo ring
+  M.orb = (() => {
+    const m = new Mesh(), N = 8, rows = [[1.9, 0], [0.55, 0.62], [0.35, 0.72], [-0.35, 0.72], [-0.55, 0.62], [-1.5, 0]];
+    for (let r = 0; r < rows.length - 1; r++) for (let k = 0; k < N; k++) {
+      const a0 = k / N * TAU, a1 = (k + 1) / N * TAU, [y0, r0] = rows[r], [y1, r1] = rows[r + 1];
+      const p = [[Math.sin(a0) * r0, y0, Math.cos(a0) * r0], [Math.sin(a1) * r0, y0, Math.cos(a1) * r0], [Math.sin(a1) * r1, y1, Math.cos(a1) * r1], [Math.sin(a0) * r1, y1, Math.cos(a0) * r1]];
+      const n = V.norm(V.cross(V.sub(p[2], p[0]), V.sub(p[1], p[3]))), sh = (k % 2 ? 0.7 : 1.0) * (r === 2 ? 1.15 : 1);
+      const c = [sh, sh, sh, 5], i0 = m.v(p[0], n, c), i1 = m.v(p[1], n, c), i2 = m.v(p[2], n, c), i3 = m.v(p[3], n, c);
+      m.tri(i0, i3, i1); m.tri(i1, i3, i2);
+    }
+    m.merge(transformed(torusMesh(1.35, 0.045, 40, 5, [1, 1, 1, 5]), M4.rotX(M4.id(), 0.35)));
+    return m;
+  })();
   M.heart = (() => {
     const h = new Mesh();
     h.merge(sphereMesh(16, 12, COL.scarf), M4.scale(at(-0.28, 0.12, 0), 0.42, 0.42, 0.3));
@@ -3769,8 +3781,8 @@ function buildDynamic() {
   // orbs
   for (const o of WORLD.orbs) {
     if (o.got) continue;
-    const m = at(o.x, o.y + Math.sin(t * 2.4 + o.ph) * 0.12, o.z); M4.rotY(m, t * 1.8 + o.ph); M4.rotX(m, 0.6); M4.scale(m, 0.15);
-    L.add('orb', m, [1.0, 0.68, 0.18, 0.8], [0.25, 0.6, 0, 0]);
+    const m = at(o.x, o.y + Math.sin(t * 2.4 + o.ph) * 0.12, o.z); M4.rotY(m, t * 1.8 + o.ph); M4.rotZ(m, Math.sin(t * 1.3 + o.ph) * 0.15); M4.scale(m, 0.14);
+    L.add('orb', m, [1.0, 0.7, 0.2, 0.45], [0.25, 0.6, 0, 0]);
   }
   for (const h of WORLD.hearts) {
     if (h.got) continue;
