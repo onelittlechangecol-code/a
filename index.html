@@ -575,6 +575,15 @@ function buildMeshes() {
     p.merge(cylMesh(32, 0.44, 0.62, 0.3, stoneC(4, 0.95), true), at(0, 3.9, 0));
     p.merge(transformed(torusMesh(0.46, 0.05, 32, 8, [...COL.orb, 5]), at(0, 3.92, 0)));
     p.merge(cylMesh(4, 0.82, 0.82, 0.2, stoneC(4, 0.85), true), M4.rotY(at(0, 4.2, 0), Math.PI / 4));
+    // weathering: stone everywhere, moss only in irregular patches that thin out as they climb; soot-dark streaks
+    for (let k = 0; k < p.vcount; k++) {
+      const x = p.p[k * 3], y = p.p[k * 3 + 1], z = p.p[k * 3 + 2];
+      const mossN = noise3(x * 3.1 + 7, y * 2.3, z * 3.1), moss = smooth(1.4, 0.0, y) * smooth(0.48, 0.62, mossN) + smooth(0.3, 0.0, y) * 0.5;
+      const streak = 0.9 + 0.12 * noise3(Math.atan2(x, z) * 3, y * 0.4, 1);
+      const st = V.mul(COL.stone, streak * (0.9 + 0.12 * noise3(x * 9, y * 9, z * 9)));
+      const c = V.lerp(st, COL.moss, clamp(moss, 0, 1));
+      p.c[k * 4] = c[0]; p.c[k * 4 + 1] = c[1]; p.c[k * 4 + 2] = c[2]; if (p.c[k * 4 + 3] !== 5) p.c[k * 4 + 3] = moss > 0.5 ? 8 : 11;
+    }
     return p;
   })();
   M.rune = (() => { const r = cylMesh(4, 0.2, 0.2, 1.6, [1, 1, 1, 13], true); return r; })();
@@ -582,6 +591,13 @@ function buildMeshes() {
   M.portalRing = (() => {
     const r = new Mesh();
     r.merge(torusMesh(2.4, 0.34, 64, 14, (p, n, a) => { const joint = Math.abs(Math.sin(a * 8)) < 0.06; return V.mul(COL.stone, joint ? 0.55 : 0.9 + 0.1 * Math.sin(a * 3)).concat([11]); }));
+    // carved voussoirs: sink the joints between the sixteen blocks so each block stands proud
+    for (let k = 0; k < r.vcount; k++) {
+      const x = r.p[k * 3], y = r.p[k * 3 + 1], z = r.p[k * 3 + 2], a = Math.atan2(z, x), j = Math.abs(Math.sin(a * 8));
+      if (j < 0.09) { const rr = Math.hypot(x, z), cx = x / rr * 2.4, cz = z / rr * 2.4, s = 1 - 0.14 * (1 - j / 0.09);
+        r.p[k * 3] = cx + (x - cx) * s; r.p[k * 3 + 1] = y * s; r.p[k * 3 + 2] = cz + (z - cz) * s; }
+    }
+    r.recomputeNormals();
     r.merge(torusMesh(2.08, 0.05, 64, 8, [...COL.orb, 5]));
     r.merge(torusMesh(2.72, 0.04, 64, 8, [...COL.orb, 5]));
     r.merge(ellipsoid([0, 0, 2.75], [0.42, 0.36, 0.5], (n0) => V.mul(COL.stone, 0.95).concat([11]), 18, 12));
