@@ -3162,7 +3162,14 @@ fn vnoise3(p: vec3f) -> f32 {
   let ringLine = step(0.92, fract(tr * 1.4)); let segLine = step(0.94, fract(ta / 6.2832 * (8.0 + floor(tr * 1.4) * 6.0)));
   let tileJoint = isTile * step(0.99, abs(v.n.y)) * max(ringLine, segLine);
   let sunInlay = isTile * step(tr, 1.2) * step(0.99, abs(v.n.y));
+  // weathered tiles: each tile its own tone with grime toward its edges, moss creeping along the joints outward
+  let tid = vec2f(floor(tr * 1.4), floor(ta / 6.2832 * (8.0 + floor(tr * 1.4) * 6.0)));
+  let th = fract(sin(dot(tid, vec2f(12.9898, 78.233))) * 43758.5453);
+  let edge = max(smoothstep(0.7, 0.92, fract(tr * 1.4)), smoothstep(0.75, 0.94, fract(ta / 6.2832 * (8.0 + floor(tr * 1.4) * 6.0))));
+  let topFace = isTile * step(0.99, abs(v.n.y));
+  base *= mix(1.0, (0.84 + 0.3 * th) * (1.0 - 0.15 * edge) * (0.92 + 0.16 * vnoise3(p * 14.0)), topFace);
   base = mix(base, base * 0.55, tileJoint);
+  base = mix(base, vec3f(0.16, 0.24, 0.09), tileJoint * smoothstep(1.5, 3.0, tr) * step(0.58, vnoise3(p * 5.0)) * 0.85);
   base = mix(base, vec3f(0.78, 0.55, 0.2), sunInlay * step(abs(fract(tr * 2.5) - 0.5), 0.2));
   // portal: a slow spiral of light
   let sw = sin(ta * 5.0 + tr * 1.8 - F.camPos.w * 2.4) * 0.5 + 0.5;
