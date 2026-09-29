@@ -3343,7 +3343,7 @@ fn vnoise3(p: vec3f) -> f32 {
   let pores = vnoise3(p * 1100.0);
   let brushed = vnoise3(vec3f(p.x * 900.0, p.y * 18.0, p.z * 900.0));
   let strands = sin(p.x * 150.0 + vnoise3(vec3f(p.x * 30.0, p.y * 3.0, p.z * 30.0)) * 1.5) * 0.5 + 0.5;
-  let capStr = sin(atan2(p.x, p.z) * 90.0 + vnoise3(p * 40.0) * 2.0) * 0.5 + 0.5;
+  let capStr = sin(atan2(p.x, p.z) * 48.0 + vnoise3(p * 22.0) * 2.5) * 0.5 + 0.5;
   let hairH = mix(strands, capStr, step(1.2, p.y));
   let embH = isEmb * step(p.y, 0.72) * step(0.63, p.y) * (1.0 - smoothstep(0.08, 0.16, abs(abs(fract(atan2(p.x, p.z) * 7.0 / 3.14159) - 0.5) * 2.0 + abs((p.y - 0.676) / 0.02) - 0.75)));
   let leafy = vnoise3(p * 20.0) * 0.6 + vnoise3(p * 52.0) * 0.4;
@@ -3360,7 +3360,7 @@ fn vnoise3(p: vec3f) -> f32 {
         + isLeather * grain * smoothstep(0.006, 0.0015, fp) * 0.0006
         + isSkin * pores * smoothstep(0.0015, 0.0004, fp) * 0.00002
         + isMetal * brushed * 0.00008
-        + isHair * hairH * smoothstep(0.006, 0.0015, fp) * 0.0004;
+        + isHair * hairH * smoothstep(0.004, 0.001, fp) * 0.0003;
   // bump from a height field using screen-space derivatives (no tangents needed)
   let dhx = dpdx(h); let dhy = dpdy(h); let px = dpdx(v.wp); let py = dpdy(v.wp);
   let r1 = cross(py, n); let r2 = cross(n, px); let det = dot(px, r1);
@@ -3428,7 +3428,7 @@ fn vnoise3(p: vec3f) -> f32 {
   if (!ff) { base *= 1.0 - isCape * 0.35; }
   base *= (1.0 + isStone * (stone - 0.5) * 0.5 + isGrass * (turf - 0.5) * 0.4);
   base *= (1.0 + isLeaf * (leafy - 0.5) * 0.45) * (1.0 - isBark * (1.0 - grooves) * 0.35);
-  base *= 1.0 - isCloth * (1.0 - weave) * 0.11 - isCloth * (vnoise3(p * 45.0) - 0.5) * 0.1 - isLeather * (0.55 - grain) * 0.22 - isHair * (1.0 - hairH) * 0.1 * smoothstep(0.006, 0.0015, fp);
+  base *= 1.0 - isCloth * (1.0 - weave) * 0.11 - isCloth * (vnoise3(p * 45.0) - 0.5) * 0.1 - isLeather * (0.55 - grain) * 0.22 - isHair * (1.0 - hairH) * 0.08 * smoothstep(0.004, 0.001, fp);
   // iris fibres + dark limbal ring (only shows on the coloured part of the eye)
   let ir = length(p.xy); let ang = atan2(p.y, p.x);
   let fib = 0.8 + 0.2 * sin(ang * 46.0 + vnoise3(p * 9.0) * 6.0) - smoothstep(0.75, 1.0, ir) * 0.35 + smoothstep(0.35, 0.0, ir) * 0.2;
