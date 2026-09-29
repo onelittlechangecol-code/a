@@ -1732,7 +1732,19 @@ function buildGoblin(M) {
     const b = new Mesh();
     b.merge(ellipsoid([0, 0.56, 0], [0.27, 0.28, 0.25], (n0) => V.lerp(G.skin, G.belly, smooth(0.2, 0.8, n0[2]) * smooth(0.6, -0.2, n0[1]) * 0.9).concat([3]), 28, 20,
       (q, n0) => { if (n0[2] > 0 && n0[1] < 0.3) q[2] *= 1.12; if (n0[1] > 0.6) q[0] *= 1.08; return q; }));
-    b.merge(tubeMesh([0, 0.44, 0], [0, 0.18, 0.01], t => lerp(0.24, 0.3, t), (t, a) => (Math.sin(a * 7) > 0.6 ? G.leather : V.mul(G.leather, 1.2).concat([3])), 26, 5, [false, false]));
+    // loincloth: overlapping hide flaps of uneven length with ragged, notched hems and soft folds
+    for (let k = 0; k < 9; k++) {
+      const a0 = k / 9 * TAU - 0.15, a1 = a0 + TAU / 9 + 0.18, len = 0.22 + 0.07 * ((k * 5) % 3) / 2, fm = new Mesh(), NU = 6, NA = 6;
+      const tone = V.mul(G.leather, 0.85 + 0.35 * ((k * 7) % 4) / 3);
+      for (let u = 0; u <= NU; u++) for (let j = 0; j <= NA; j++) {
+        const t = u / NU, a = lerp(a0, a1, j / NA), rag = u === NU ? 0.03 * Math.abs(Math.sin(j * 2.7 + k)) : 0;
+        const r = lerp(0.245, 0.305, t) + 0.008 * Math.sin(j * 1.9 + t * 3) + (k % 2) * 0.006;
+        fm.v([Math.sin(a) * r, 0.44 - t * len + rag, Math.cos(a) * r + 0.01 * t], [Math.sin(a), 0, Math.cos(a)], V.mul(tone, 1 - 0.18 * t).concat([3]));
+      }
+      for (let u = 0; u < NU; u++) for (let j = 0; j < NA; j++) { const q = u * (NA + 1) + j, bq = q + NA + 1; fm.tri(q, bq, q + 1); fm.tri(q + 1, bq, bq + 1); }
+      fm.recomputeNormals(); b.merge(fm);
+    }
+    b.merge(tubeMesh([0, 0.44, 0], [0, 0.26, 0.01], t => lerp(0.235, 0.27, t), () => V.mul(G.leather, 0.6).concat([3]), 20, 3, [false, false]));
     b.merge(transformed(torusMesh(1, 0.08, 34, 6, G.rope), M4.scale(at(0, 0.45, 0), 0.25, 0.25, 0.235)));
     for (const [x, y, z] of [[0.16, 0.66, 0.17], [-0.2, 0.52, 0.12], [0.05, 0.75, -0.2]]) b.merge(ellipsoid([x, y, z], [0.02, 0.02, 0.02], G.skinDark, 8, 6));
     // shoulder mounds
