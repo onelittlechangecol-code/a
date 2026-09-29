@@ -510,17 +510,20 @@ function buildMeshes() {
     }
     M.island = isl;
   }
-  // grass tuft (double sided blades)
+  // grass tuft: a dense clump of thin tapered blades that arc outward, dark at the root and sunlit at the tips
   {
-    const g = new Mesh();
-    for (let k = 0; k < 5; k++) {
-      const a = k / 5 * TAU + 0.4, lean = 0.25, h = 0.55 + (k % 3) * 0.18;
-      const d = [Math.sin(a), 0, Math.cos(a)], side = [Math.cos(a) * 0.06, 0, -Math.sin(a) * 0.06];
-      const base = V.mul(d, 0.08), tip = V.add(V.mul(d, 0.08 + lean), [0, h, 0]);
-      const n = V.norm(V.cross(side, V.sub(tip, base)));
-      const c0 = V.mul(COL.grass, 0.55), c1 = COL.grass2;
-      const i0 = g.v(V.add(base, side), n, c0), i1 = g.v(V.sub(base, side), n, c0), i2 = g.v(tip, n, c1);
-      g.tri(i0, i1, i2);
+    const g = new Mesh(); let sd = 5; const rnd = () => { sd = (sd * 16807) % 2147483647; return sd / 2147483647; };
+    for (let k = 0; k < 12; k++) {
+      const a = k / 12 * TAU + rnd() * 0.5, r0 = 0.02 + rnd() * 0.06, h = 0.38 + rnd() * 0.42, lean = 0.12 + rnd() * 0.22, w = 0.018 + rnd() * 0.01;
+      const d = [Math.sin(a), 0, Math.cos(a)], side = [Math.cos(a), 0, -Math.sin(a)], tone = 0.85 + rnd() * 0.3;
+      const base = g.vcount, S = 3;
+      for (let u = 0; u <= S; u++) {
+        const t = u / S, p = V.add(V.mul(d, r0 + lean * t * t), [0, h * (t - 0.12 * t * t), 0]), ww = w * (1 - t * 0.92);
+        const n = V.norm(V.add(V.mul(d, 0.6), [0, 1.2, 0]));
+        const c = V.mul(V.lerp(V.mul(COL.grass, 0.68), COL.grass2, Math.pow(t, 0.7)), tone).concat([8]);
+        g.v(V.add(p, V.mul(side, ww)), n, c); g.v(V.sub(p, V.mul(side, ww)), n, c);
+      }
+      for (let u = 0; u < S; u++) { const q = base + u * 2; g.tri(q, q + 1, q + 2); g.tri(q + 1, q + 3, q + 2); }
     }
     M.tuft = g;
   }
@@ -666,7 +669,7 @@ function buildWorld() {
     props.rocks.push({ x, z, y, s, v: Math.floor(srand() * 3), yaw: srand() * TAU });
     solids.push({ x, z, r: 0.85 * s, top: y + 0.75 * s, bottom: y - 2, kind: 'rock' });
   }
-  for (let tries = 0; tries < 60000 && props.tufts.length < 5200; tries++) {
+  for (let tries = 0; tries < 60000 && props.tufts.length < 8500; tries++) {
     const x = (srand() - 0.5) * 150, z = (srand() - 0.5) * 150;
     if (!okLand(x, z, 1.4, 22, 0.82) || pathDist(x, z) < 1.4) continue;
     props.tufts.push({ x, z, y: heightAt(x, z), s: 0.6 + srand() * 0.8, yaw: srand() * TAU });
