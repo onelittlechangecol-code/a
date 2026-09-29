@@ -3657,7 +3657,7 @@ async function initRenderer(meshes) {
   GR.capeData = new Float32Array(CAPE.W * CAPE.H * 13);
   const cidx = []; for (let j = 0; j < CAPE.H - 1; j++) for (let i = 0; i < CAPE.W - 1; i++) { const a = j * CAPE.W + i; cidx.push(a, a + 1, a + CAPE.W, a + 1, a + CAPE.W + 1, a + CAPE.W); }
   GR.capeVB = empty(GR.capeData.byteLength, U.VERTEX); GR.capeIB = mk(new Uint32Array(cidx), U.INDEX); GR.capeCount = cidx.length;
-  GR.trailData = new Float32Array(16 * 6 * 7);
+  GR.trailData = new Float32Array(16 * 12 * 7);
   GR.trailVB = empty(GR.trailData.byteLength, U.VERTEX);
   // instances
   GR.maxDyn = 1024;
@@ -4051,9 +4051,12 @@ function buildCapeTrail() {
   const tr = rig.trail, d = GR.trailData; let n = 0;
   for (let i = 1; i < tr.length; i++) {
     const a0 = tr[i - 1], a1 = tr[i], f0 = (i - 1) / tr.length, f1 = i / tr.length;
-    const c = (f) => [1.5, 2.0, 2.3, Math.min(1, f * 1.2) * 0.9];
-    const q = [[a0[0], f0 * 0.3], [a0[1], f0], [a1[1], f1], [a0[0], f0 * 0.3], [a1[1], f1], [a1[0], f1 * 0.3]];
-    for (const [pt, f] of q) { d.set([...pt, ...c(f)], n * 7); n++; }
+    // energy arc: nearly clear toward the hilt, a hot blue-white edge at the tip, fading with age
+    const tipC = (f) => [2.4, 2.7, 3.0, Math.pow(Math.min(1, f * 1.15), 1.6)], baseC = (f) => [0.5, 0.9, 1.4, Math.min(1, f) * 0.08];
+    const mid = (a, b) => V.lerp(a, b, 0.72), midC = (f) => [1.2, 1.7, 2.2, Math.min(1, f) * 0.35];
+    const m0 = mid(a0[0], a0[1]), m1 = mid(a1[0], a1[1]);
+    const quads = [[[a0[0], baseC(f0)], [m0, midC(f0)], [m1, midC(f1)], [a1[0], baseC(f1)]], [[m0, midC(f0)], [a0[1], tipC(f0)], [a1[1], tipC(f1)], [m1, midC(f1)]]];
+    for (const qd of quads) for (const k of [0, 1, 2, 0, 2, 3]) { d.set([...qd[k][0], ...qd[k][1]], n * 7); n++; }
   }
   GR.trailCount = n;
   if (n) GR.device.queue.writeBuffer(GR.trailVB, 0, d, 0, n * 7);
