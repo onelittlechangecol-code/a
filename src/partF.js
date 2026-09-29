@@ -408,33 +408,52 @@ fn vnoise3(p: vec3f) -> f32 {
   let p = v.lp;
   // fade micro detail out before it can alias
   let fp = length(fwidth(p)) + 1e-6;
-  // fabric: over-under weave plus slubby threads
-  let wx = sin(p.x * 1500.0 + sin(p.y * 90.0) * 0.6); let wy = sin(p.y * 1500.0);
-  let weave = (wx * 0.5 + 0.5) * (wy * 0.5 + 0.5) + vnoise3(p * 420.0) * 0.35;
-  // leather: pebbled grain and soft creases
-  let grain = vnoise3(p * 320.0) * 0.6 + vnoise3(p * 900.0) * 0.4 - smoothstep(0.62, 0.7, vnoise3(p * 60.0)) * 0.6;
-  // skin: fine pores; metal: brushed along the blade; hair: strand striations
-  let pores = vnoise3(p * 1100.0);
-  let brushed = vnoise3(vec3f(p.x * 900.0, p.y * 18.0, p.z * 900.0));
-  let strands = sin(p.x * 150.0 + vnoise3(vec3f(p.x * 30.0, p.y * 3.0, p.z * 30.0)) * 1.5) * 0.5 + 0.5;
-  let capStr = sin(atan2(p.x, p.z) * 48.0 + vnoise3(p * 22.0) * 2.5) * 0.5 + 0.5;
-  let hairH = mix(strands, capStr, step(1.2, p.y));
-  let embH = isEmb * step(p.y, 0.72) * step(0.63, p.y) * (1.0 - smoothstep(0.08, 0.16, abs(abs(fract(atan2(p.x, p.z) * 7.0 / 3.14159) - 0.5) * 2.0 + abs((p.y - 0.676) / 0.02) - 0.75)));
-  let leafy = vnoise3(p * 20.0) * 0.6 + vnoise3(p * 52.0) * 0.4;
-  let grooves = sin(atan2(p.x, p.z) * 15.0 + vnoise3(p * vec3f(3.0, 0.5, 3.0)) * 5.0) * 0.5 + 0.5;
-  let stone = vnoise3(p * 5.0) * 0.5 + vnoise3(p * 16.0) * 0.3 + vnoise3(p * 40.0) * 0.2 - smoothstep(0.015, 0.0, abs(vnoise3(p * 3.0) - 0.5)) * 0.3;
-  let turf = vnoise3(p * 34.0) * 0.6 + vnoise3(p * 90.0) * 0.4;
-  // riveted mail: staggered rows of interlocking rings
-  let mu = atan2(p.x, p.z) * 16.0; let mv = p.y * 70.0; let mrow = floor(mv);
-  let mc = vec2f(fract(mu + 0.5 * (mrow - 2.0 * floor(mrow * 0.5))) - 0.5, fract(mv) - 0.5);
-  let mr = length(mc * vec2f(1.0, 0.8));
-  let ringH = 1.0 - smoothstep(0.08, 0.2, abs(mr - 0.34));
-  let mailFade = smoothstep(0.02, 0.006, fp);
-  let h = isMail * ringH * mailFade * 0.0022 + isStone * stone * 0.035 + isGrass * turf * 0.012 + isLeaf * leafy * 0.02 + isBark * (grooves * 0.6 + vnoise3(p * 12.0) * 0.4) * 0.025 + embH * 0.0008 + isCloth * weave * smoothstep(0.004, 0.0012, fp) * 0.00035
-        + isLeather * grain * smoothstep(0.006, 0.0015, fp) * 0.0006
-        + isSkin * pores * smoothstep(0.0015, 0.0004, fp) * 0.00002
-        + isMetal * brushed * 0.00008
-        + isHair * hairH * smoothstep(0.004, 0.001, fp) * 0.0003;
+  // procedural micro-detail: only the pattern of this pixel's material is evaluated (was all of them, every pixel)
+  var weave = 0.5; var grain = 0.55; var hairH = 1.0; var leafy = 0.5; var grooves = 1.0; var stone = 0.5; var turf = 0.5;
+  var ringH = 0.0; var mailFade = 0.0; var slub = 0.5; var h = 0.0;
+  if (isCloth > 0.5) {
+    // fabric: over-under weave plus slubby threads
+    let wx = sin(p.x * 1500.0 + sin(p.y * 90.0) * 0.6); let wy = sin(p.y * 1500.0);
+    let fine = smoothstep(0.004, 0.0012, fp);
+    if (fine > 0.0) { weave = (wx * 0.5 + 0.5) * (wy * 0.5 + 0.5) + vnoise3(p * 420.0) * 0.35; }
+    slub = vnoise3(p * 45.0);
+    let embH = isEmb * step(p.y, 0.72) * step(0.63, p.y) * (1.0 - smoothstep(0.08, 0.16, abs(abs(fract(atan2(p.x, p.z) * 7.0 / 3.14159) - 0.5) * 2.0 + abs((p.y - 0.676) / 0.02) - 0.75)));
+    h = embH * 0.0008 + weave * fine * 0.00035;
+  } else if (isLeather > 0.5) {
+    // leather: pebbled grain and soft creases
+    grain = vnoise3(p * 320.0) * 0.6 + vnoise3(p * 900.0) * 0.4 - smoothstep(0.62, 0.7, vnoise3(p * 60.0)) * 0.6;
+    h = grain * smoothstep(0.006, 0.0015, fp) * 0.0006;
+  } else if (isSkin > 0.5) {
+    let fine = smoothstep(0.0015, 0.0004, fp);
+    if (fine > 0.0) { h = vnoise3(p * 1100.0) * fine * 0.00002; }
+  } else if (isMetal > 0.5) {
+    h = vnoise3(vec3f(p.x * 900.0, p.y * 18.0, p.z * 900.0)) * 0.00008;
+  } else if (isHair > 0.5) {
+    let strands = sin(p.x * 150.0 + vnoise3(vec3f(p.x * 30.0, p.y * 3.0, p.z * 30.0)) * 1.5) * 0.5 + 0.5;
+    let capStr = sin(atan2(p.x, p.z) * 48.0 + vnoise3(p * 22.0) * 2.5) * 0.5 + 0.5;
+    hairH = mix(strands, capStr, step(1.2, p.y));
+    h = hairH * smoothstep(0.004, 0.001, fp) * 0.0003;
+  } else if (isLeaf > 0.5) {
+    leafy = vnoise3(p * 20.0) * 0.6 + vnoise3(p * 52.0) * 0.4;
+    h = leafy * 0.02;
+  } else if (isBark > 0.5) {
+    grooves = sin(atan2(p.x, p.z) * 15.0 + vnoise3(p * vec3f(3.0, 0.5, 3.0)) * 5.0) * 0.5 + 0.5;
+    h = (grooves * 0.6 + vnoise3(p * 12.0) * 0.4) * 0.025;
+  } else if (isStone > 0.1) {
+    stone = vnoise3(p * 5.0) * 0.5 + vnoise3(p * 16.0) * 0.3 + vnoise3(p * 40.0) * 0.2 - smoothstep(0.015, 0.0, abs(vnoise3(p * 3.0) - 0.5)) * 0.3;
+    h = isStone * stone * 0.035;
+  } else if (isGrass > 0.5) {
+    turf = vnoise3(p * 34.0) * 0.6 + vnoise3(p * 90.0) * 0.4;
+    h = turf * 0.012;
+  } else if (isMail > 0.5) {
+    // riveted mail: staggered rows of interlocking rings
+    let mu = atan2(p.x, p.z) * 16.0; let mv = p.y * 70.0; let mrow = floor(mv);
+    let mc = vec2f(fract(mu + 0.5 * (mrow - 2.0 * floor(mrow * 0.5))) - 0.5, fract(mv) - 0.5);
+    let mr = length(mc * vec2f(1.0, 0.8));
+    ringH = 1.0 - smoothstep(0.08, 0.2, abs(mr - 0.34));
+    mailFade = smoothstep(0.02, 0.006, fp);
+    h = ringH * mailFade * 0.0022;
+  }
   // bump from a height field using screen-space derivatives (no tangents needed)
   let dhx = dpdx(h); let dhy = dpdy(h); let px = dpdx(v.wp); let py = dpdy(v.wp);
   let r1 = cross(py, n); let r2 = cross(n, px); let det = dot(px, r1);
@@ -502,7 +521,7 @@ fn vnoise3(p: vec3f) -> f32 {
   if (!ff) { base *= 1.0 - isCape * 0.35; }
   base *= (1.0 + isStone * (stone - 0.5) * 0.5 + isGrass * (turf - 0.5) * 0.4);
   base *= (1.0 + isLeaf * (leafy - 0.5) * 0.45) * (1.0 - isBark * (1.0 - grooves) * 0.35);
-  base *= 1.0 - isCloth * (1.0 - weave) * 0.11 - isCloth * (vnoise3(p * 45.0) - 0.5) * 0.1 - isLeather * (0.55 - grain) * 0.22 - isHair * (1.0 - hairH) * 0.08 * smoothstep(0.004, 0.001, fp);
+  base *= 1.0 - isCloth * (1.0 - weave) * 0.11 - isCloth * (slub - 0.5) * 0.1 - isLeather * (0.55 - grain) * 0.22 - isHair * (1.0 - hairH) * 0.08 * smoothstep(0.004, 0.001, fp);
   // iris fibres + dark limbal ring (only shows on the coloured part of the eye)
   let ir = length(p.xy); let ang = atan2(p.y, p.x);
   let fib = 0.8 + 0.2 * sin(ang * 46.0 + vnoise3(p * 9.0) * 6.0) - smoothstep(0.75, 1.0, ir) * 0.35 + smoothstep(0.35, 0.0, ir) * 0.2;

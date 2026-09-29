@@ -280,8 +280,10 @@ function groupVisible(g, mode) {
 function drawGroups(pass, groups, instBuf, cull) {
   pass.setVertexBuffer(1, instBuf);
   for (const g of groups) {
-    if (cull && !groupVisible(g, cull)) continue;
-    const mi = GR.meshInfo[g.mesh];
+    if (cull && cull !== 'lo' && !groupVisible(g, cull)) continue;
+    // level of detail: distant chunks, shadows and the reflection use the _lo mesh when one exists
+    let mi = GR.meshInfo[g.mesh];
+    if (g.b && cull !== undefined) { const lo = GR.meshInfo[g.mesh + '_lo']; if (lo && (cull !== 'view' || Math.hypot(g.b[0] - cam.pos[0], g.b[2] - cam.pos[2]) - g.b[3] > 30)) mi = lo; }
     pass.drawIndexed(mi.count, g.count, mi.first, mi.base, g.first);
   }
 }
@@ -341,7 +343,7 @@ function render() {
     pass.setPipeline(GR.pSkyR); pass.draw(3);
     pass.setPipeline(GR.pTerrainR); pass.setVertexBuffer(0, GR.terrVB); pass.setIndexBuffer(GR.terrIB, 'uint32'); pass.drawIndexed(GR.terrCount);
     pass.setPipeline(GR.pMeshR); pass.setVertexBuffer(0, GR.meshVB); pass.setIndexBuffer(GR.meshIB, 'uint32');
-    drawGroups(pass, GR.shadowGroups, GR.staticIB);
+    drawGroups(pass, GR.shadowGroups, GR.staticIB, 'lo');
     drawGroups(pass, GR.dynGroups, GR.dynIB);
     if (heroVisible) {
       pass.setPipeline(GR.pHeroR);
@@ -454,6 +456,7 @@ function frame(now) {
   }
   cameraUpdate(dt, state.mode === 'play' ? inp.cam : [0, 0]);
   if (!window.__skipRender) perfStep(dt);
+  if (FPSHUD) fpsHud(dt);
   if (!window.__skipRender) { try { render(); } catch (e) { console.error(e); } }
   requestAnimationFrame(frame);
 }
@@ -542,6 +545,16 @@ function setQuality(q, auto = false) {
 }
 function cycleQuality() { const order = ['alta', 'media', 'baja']; setQuality(order[(order.indexOf(state.quality) + 1) % 3]); }
 const perf = { t: 0, n: 0, slow: 0 };
+// optional diagnostics: open the game with ?fps to see frame rate, resolution and quality on the device
+const FPSHUD = /[?&]fps/.test(location.search);
+const fpsS = { t: 0, n: 0, worst: 0, el: null };
+function fpsHud(dt) {
+  fpsS.t += dt; fpsS.n++; fpsS.worst = Math.max(fpsS.worst, dt);
+  if (fpsS.t < 0.5) return;
+  if (!fpsS.el) { fpsS.el = document.createElement('div'); fpsS.el.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:50;font:12px/1.4 ui-monospace,monospace;color:#fff;background:rgba(0,0,0,.6);padding:4px 8px;border-radius:6px;pointer-events:none;white-space:pre'; document.body.appendChild(fpsS.el); }
+  fpsS.el.textContent = `${Math.round(fpsS.n / fpsS.t)} fps · ${(fpsS.t / fpsS.n * 1000).toFixed(1)} ms (peor ${(fpsS.worst * 1000).toFixed(0)})\n${GR.w}×${GR.h} · escala ${(GR.rscale || 1).toFixed(2)} · ${state.quality}`;
+  fpsS.t = 0; fpsS.n = 0; fpsS.worst = 0;
+}
 // adaptive performance: dynamic resolution first (every second), then quality presets; aims at ~60 fps on any device
 function perfStep(dt) {
   if (state.mode !== 'play' && state.mode !== 'cine' && state.mode !== 'title') return;

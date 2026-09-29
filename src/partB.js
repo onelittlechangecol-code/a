@@ -306,21 +306,28 @@ function buildMeshes() {
     t.recomputeNormals();
     for (const [y, a] of [[1.1, 0.8], [1.9, 3.6]]) t.merge(ellipsoid([Math.sin(a) * 0.3, y, Math.cos(a) * 0.3], [0.07, 0.09, 0.05], (n0) => (n0[2] > 0.6 ? barkDark : bark), 10, 8));
     M.trunk = t;
+    const tl = new Mesh();
+    tl.merge(tubeMesh([0, -0.3, 0], [0, 3.1, 0], (u) => lerp(0.46, 0.22, Math.pow(u, 0.7)) + (u < 0.12 ? (0.12 - u) * 1.6 : 0), () => bark, 7, 4, [false, true]));
+    for (let k = 0; k < 4; k++) { const a = k / 4 * TAU + 0.5, y0 = 2.0 + k * 0.25; tl.merge(tubeMesh([Math.sin(a) * 0.12, y0, Math.cos(a) * 0.12], [Math.sin(a) * 0.85, y0 + 0.9, Math.cos(a) * 0.85], (u) => lerp(0.13, 0.04, u), () => barkDark, 4, 1)); }
+    M.trunk_lo = tl;
   }
   for (let v = 0; v < 3; v++) {
     // leafy crown: many smooth, lumpy clumps (foliage material 8)
     let sd0 = 11 + v * 97; const r = () => { sd0 = (sd0 * 16807) % 2147483647; return sd0 / 2147483647; };
-    const cm = new Mesh(), n = 12 + v * 2;
+    const cm = new Mesh(), lo = new Mesh(), n = 12 + v * 2;
     const lite = hexToRgb(['#8fcf4a', '#a4d45a', '#7cc04a'][v]), dark = hexToRgb(['#3d7a2c', '#4a8a2e', '#356f2a'][v]);
     for (let k = 0; k < n; k++) {
       const a = r() * TAU, y = -0.35 + r() * 0.9, rr = (1 - Math.abs(y - 0.1) * 0.9) * (0.45 + r() * 0.35);
       const pos = [Math.sin(a) * rr, y, Math.cos(a) * rr], s = 0.36 + r() * 0.2, seed = r() * 50;
-      cm.merge(ellipsoid(pos, [s, s * 0.82, s], (n0) => {
+      const col = (n0) => {
         const up = smooth(-0.9, 0.9, n0[1] * 0.7 + (y + 0.35) * 0.6);
         return V.mul(V.lerp(dark, lite, up), 0.88 + 0.24 * hash2(k, 3)).concat([8]);
-      }, 18, 12, (q, n0) => V.mul(q, 0.8 + 0.3 * noise3(n0[0] * 2.3 + seed, n0[1] * 2.3, n0[2] * 2.3 - seed) + 0.12 * noise3(n0[0] * 8 + seed, n0[1] * 8, n0[2] * 8))));
+      }, lump = (q, n0) => V.mul(q, 0.8 + 0.3 * noise3(n0[0] * 2.3 + seed, n0[1] * 2.3, n0[2] * 2.3 - seed) + 0.12 * noise3(n0[0] * 8 + seed, n0[1] * 8, n0[2] * 8));
+      cm.merge(ellipsoid(pos, [s, s * 0.82, s], col, 13, 9, lump));
+      lo.merge(ellipsoid(pos, [s, s * 0.82, s], col, 7, 5, lump));
     }
-    M['canopy' + v] = cm;
+    // canopyN_lo: the same crown with far fewer triangles, for distant trees, shadows and the water reflection
+    M['canopy' + v] = cm; M['canopy' + v + '_lo'] = lo;
     // smooth weathered boulder with moss on top (stone material 11)
     M['rock' + v] = ellipsoid([0, 0, 0], [1, 1, 1], (n0, q) => {
       const moss = smooth(0.45, 0.8, n0[1] + 0.15 * noise3(n0[0] * 4 + sd, n0[1] * 4, n0[2] * 4));
