@@ -1173,7 +1173,22 @@ function buildHero() {
   pouch([-0.172, 0.905, 0.06], -1.1, [0.042, 0.048, 0.026], HC.leather, [BI.pelvis, BI.thigh(-1)]);
   pouch([0.16, 0.912, -0.08], 2.2, [0.034, 0.04, 0.022], HC.leatherLight, [BI.pelvis, BI.thigh(1)]);
   // baldric across the chest (front and back)
-  const strap = (pts) => { for (let i = 0; i < pts.length - 1; i++) P(tubeMesh(pts[i], pts[i + 1], () => 0.012, () => HC.leather, 8, 2), [BI.chest, BI.spine]); };
+  // flat leather strap: a ribbon with bevelled edges following the torso surface, dotted with rivets
+  const strap = (pts) => {
+    const m = new Mesh(), W = 0.017, T = 0.004, sub = [];
+    for (let i = 0; i < pts.length - 1; i++) for (let k = 0; k < 6; k++) sub.push(V.lerp(pts[i], pts[i + 1], k / 6));
+    sub.push(pts[pts.length - 1]);
+    const prof = [[-W, -T * 0.3], [-W * 0.85, T], [W * 0.85, T], [W, -T * 0.3]];
+    sub.forEach((p, i) => {
+      const tg = V.norm(V.sub(sub[Math.min(i + 1, sub.length - 1)], sub[Math.max(i - 1, 0)]));
+      const out = V.norm(V.sub([p[0], p[1], p[2]], [0, p[1], -0.006])), side = V.norm(V.cross(tg, out)), up = V.cross(side, tg);
+      for (const [s, o] of prof) m.v(V.add(p, V.add(V.mul(side, s), V.mul(up, o))), up, Math.abs(s) > W * 0.9 ? HC.leatherDark : HC.leather);
+    });
+    for (let i = 0; i < sub.length - 1; i++) for (let k = 0; k < 3; k++) { const q = i * 4 + k, b = q + 4; m.tri(q, b, q + 1); m.tri(q + 1, b, b + 1); }
+    m.recomputeNormals();
+    P(m, [BI.chest, BI.spine]);
+    for (let i = 3; i < sub.length - 3; i += 5) { const p = sub[i], out = V.norm(V.sub(p, [0, p[1], -0.006])); P(ellipsoid(V.add(p, V.mul(out, 0.005)), [0.0035, 0.0035, 0.0035], HC.gold, 6, 4), [BI.chest, BI.spine]); }
+  };
   strap([[0.12, 1.33, 0.06], [0.05, 1.24, 0.112], [-0.04, 1.12, 0.113], [-0.12, 1.0, 0.13], [-0.17, 0.96, 0.08]]);
   strap([[0.12, 1.33, -0.07], [0.04, 1.22, -0.104], [-0.06, 1.1, -0.1], [-0.13, 0.98, -0.07]]);
   // left spaulder: steel cap with a raised ridge, three overlapping lames down the upper arm, gold edging and rivets
